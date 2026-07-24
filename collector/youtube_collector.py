@@ -9,6 +9,7 @@ from datetime import datetime
 from yt_dlp import YoutubeDL
 from yt_dlp.utils import DownloadError
 
+from models import Video, Channel, SearchResult
 
 def search_videos(keyword, max_results=10):
     """
@@ -55,19 +56,37 @@ def search_videos(keyword, max_results=10):
                 if entry is None:
                     continue
 
-                videos.append({
-                    "youtube_video_id": entry.get("id"),
-                    "title": entry.get("title"),
-                    "channel": entry.get("uploader"),
-                    "channel_id": entry.get("channel_id"),
-                    "views": entry.get("view_count"),
-                    "duration": entry.get("duration"),
-                    "upload_date": entry.get("upload_date"),
-                    "thumbnail_url": entry.get("thumbnail"),
-                    "video_url": entry.get("webpage_url"),
-                    "search_keyword": keyword,
-                    "collected_at": datetime.now().isoformat()
-                })
+
+                channel = Channel(
+                     channel_id=entry.get("channel_id") or "",
+                     name=entry.get("uploader") or "Unknown"
+                )
+
+                video = Video(
+                    youtube_video_id=entry.get("id") or "",
+                    title=entry.get("title") or "Untitled",
+                    channel_id=channel.channel_id,
+                    views=entry.get("view_count") or 0,
+                    duration=entry.get("duration") or 0,
+                    upload_date=entry.get("upload_date") or "",
+                    thumbnail_url=entry.get("thumbnail") or "",
+                    video_url=entry.get("webpage_url") or "",
+                    search_keyword=keyword,
+                    collected_at=datetime.now().isoformat()
+                )
+
+               
+                videos.append(
+
+                    SearchResult(
+
+                        video=video,
+
+                        channel=channel
+
+                    )
+
+                )
 
     except DownloadError as e:
         print(f"⚠ yt-dlp error while searching '{keyword}': {e}")
