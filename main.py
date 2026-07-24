@@ -1,37 +1,34 @@
-from datetime import datetime
-
-from collector.database import (
-    create_tables,
-    insert_video,
-    get_all_videos
-)
+from collector.database import create_tables, insert_video
+from collector.youtube import search_videos
 
 
 def main():
+
+    print("=" * 50)
+    print("YouTube Research Collector")
+    print("=" * 50)
+
     create_tables()
 
-    sample_video = {
-        "youtube_video_id": "abc123",
-        "title": "Why Nice Guys Finish Last",
-        "channel": "Better Ideas",
-        "channel_id": "UC12345",
-        "views": 2300000,
-        "duration": 765,
-        "upload_date": "2025-06-14",
-        "thumbnail_url": "https://i.ytimg.com/vi/abc123/maxresdefault.jpg",
-        "video_url": "https://www.youtube.com/watch?v=abc123",
-        "search_keyword": "stickman psychology",
-        "collected_at": datetime.now().isoformat()
-    }
+    keyword = input("\nEnter search keyword: ")
 
-    insert_video(sample_video)
+    print(f"\nSearching YouTube for '{keyword}'...\n")
 
-    print("\n📦 Videos in database:\n")
+    videos = search_videos(keyword, max_results=10)
 
-    videos = get_all_videos()
+    print(f"Found {len(videos)} videos\n")
+
+    saved = 0
 
     for video in videos:
-        print(f"• {video['title']} ({video['views']:,} views)")
+        insert_video(video)
+        saved += 1
+
+        print(f"Saved: {video['title']}")
+
+    print("\n" + "=" * 50)
+    print(f"Finished! Saved {saved} videos.")
+    print("=" * 50)
 
 
 if __name__ == "__main__":
