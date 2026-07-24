@@ -9,10 +9,8 @@ Current responsibilities:
 """
 
 import sqlite3
-from pathlib import Path
+from config import DATABASE_PATH 
 
-# Database file location
-DATABASE_PATH = Path("database") / "youtube.db"
 
 
 def get_connection():
@@ -104,6 +102,26 @@ def insert_video(video):
 
     conn.commit()
     conn.close()
+
+def video_exists(youtube_video_id):
+    """
+    Check whether a video already exists in the database.
+    Returns True if found, otherwise False.
+    """
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT 1 FROM videos WHERE youtube_video_id = ?",
+        (youtube_video_id,)
+    )
+
+    exists = cursor.fetchone() is not None
+
+    conn.close()
+
+    return exists
 
 
 def get_all_videos():

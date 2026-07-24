@@ -1,34 +1,87 @@
-from collector.database import create_tables, insert_video
-from collector.youtube import search_videos
+"""
+main.py
+
+Entry point for the YouTube AI Research System.
+"""
+
+from config import MAX_RESULTS
+
+from collector.youtube_collector import search_videos
+
+from database.database_manager import (
+    create_tables,
+    insert_video,
+    video_exists,
+)
+
+from utils.keyword_loader import load_keywords
 
 
 def main():
 
-    print("=" * 50)
-    print("YouTube Research Collector")
-    print("=" * 50)
+    print("=" * 60)
+    print("YouTube AI Research Collector")
+    print("=" * 60)
 
+    # Create database tables
     create_tables()
 
-    keyword = input("\nEnter search keyword: ")
+    # Load keywords
+    keywords = load_keywords()
 
-    print(f"\nSearching YouTube for '{keyword}'...\n")
+    if not keywords:
+        print("❌ No keywords found in keywords.txt")
+        return
 
-    videos = search_videos(keyword, max_results=10)
+    total_found = 0
+    total_saved = 0
+    total_duplicates = 0
 
-    print(f"Found {len(videos)} videos\n")
+    # Process each keyword
+    for keyword in keywords:
 
-    saved = 0
+        print("\n" + "=" * 60)
+        print(f"Searching: {keyword}")
+        print("=" * 60)
 
-    for video in videos:
-        insert_video(video)
-        saved += 1
+        videos = search_videos(keyword, MAX_RESULTS)
 
-        print(f"Saved: {video['title']}")
+        print(f"Found {len(videos)} videos")
 
-    print("\n" + "=" * 50)
-    print(f"Finished! Saved {saved} videos.")
-    print("=" * 50)
+        total_found += len(videos)
+
+        saved = 0
+        duplicates = 0
+
+        for video in videos:
+
+            if video_exists(video["youtube_video_id"]):
+                duplicates += 1
+                continue
+
+            insert_video(video)
+
+            saved += 1
+
+            print(f"Saved: {video['title']}")
+
+        total_saved += saved
+        total_duplicates += duplicates
+
+        print(f"\nFinished '{keyword}'")
+        print(f"New Videos : {saved}")
+        print(f"Duplicates : {duplicates}")
+
+    print("\n" + "=" * 60)
+    print("FINAL REPORT")
+    print("=" * 60)
+
+    print(f"Keywords Processed : {len(keywords)}")
+    print(f"Videos Found       : {total_found}")
+    print(f"New Videos Saved   : {total_saved}")
+    print(f"Duplicates Skipped : {total_duplicates}")
+
+    print("=" * 60)
 
 
 if __name__ == "__main__":
