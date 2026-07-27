@@ -34,7 +34,13 @@ console = Console()
 
 
 def create_mock_video(video_id: int, keyword: str) -> dict:
-    """Create a mock YouTube API response."""
+    """Create a mock YouTube API response with varying view counts."""
+    # Alternate between high and low view counts to test filtering
+    if video_id % 3 == 0:
+        view_count = 100000 + (video_id * 1000)  # Low views (< 500k)
+    else:
+        view_count = 600000 + (video_id * 10000)  # High views (> 500k)
+    
     return {
         "id": f"video_{video_id:03d}",
         "snippet": {
@@ -48,7 +54,7 @@ def create_mock_video(video_id: int, keyword: str) -> dict:
             }
         },
         "statistics": {
-            "viewCount": str(10000 + video_id * 1000),
+            "viewCount": str(view_count),
             "likeCount": str(500 + video_id * 50),
             "commentCount": str(50 + video_id * 5)
         },
@@ -58,13 +64,24 @@ def create_mock_video(video_id: int, keyword: str) -> dict:
     }
 
 
-def mock_search_and_get_details(self, keyword: str, max_results: int) -> List[dict]:
-    """Mock implementation of search_and_get_details."""
+def mock_search_and_get_details(self, keyword: str, max_results: int, min_views: int = 0) -> List[dict]:
+    """Mock implementation of search_and_get_details with view filtering."""
     # Simulate API delay
     time.sleep(0.5)
     
     # Generate mock videos
-    return [create_mock_video(i, keyword) for i in range(1, max_results + 1)]
+    videos = [create_mock_video(i, keyword) for i in range(1, max_results + 1)]
+    
+    # Apply view filter if min_views is specified
+    if min_views > 0:
+        filtered = []
+        for video in videos:
+            view_count = int(video["statistics"]["viewCount"])
+            if view_count >= min_views:
+                filtered.append(video)
+        return filtered
+    
+    return videos
 
 
 def optimized_collection_test(keyword: str, target_count: int = 100) -> None:
@@ -110,7 +127,7 @@ def optimized_collection_test(keyword: str, target_count: int = 100) -> None:
         console.print(f"  Number of batches: {num_batches}")
         console.print()
         
-        # Mock the search_and_get_details method
+        # Mock the search_and_get_details method with view filtering
         with patch.object(YouTubeService, 'search_and_get_details', mock_search_and_get_details):
             start_time = time.time()
             total_collected = 0
@@ -132,18 +149,19 @@ def optimized_collection_test(keyword: str, target_count: int = 100) -> None:
                     total=target_count
                 )
                 
-                # Collect videos in batches
+                # Collect videos in batches with 500k view filter
                 for batch_num in range(num_batches):
                     remaining = target_count - total_collected
                     current_batch_size = min(batch_size, remaining)
                     
-                    console.print(f"\n[yellow]Batch {batch_num + 1}/{num_batches}:[/yellow] Collecting {current_batch_size} videos...")
+                    console.print(f"\n[yellow]Batch {batch_num + 1}/{num_batches}:[/yellow] Collecting {current_batch_size} videos with 500k+ views...")
                     
                     try:
-                        # Search and get details (mocked)
+                        # Search and get details with view filter (mocked)
                         video_items = youtube_service.search_and_get_details(
                             keyword,
-                            current_batch_size
+                            current_batch_size,
+                            min_views=500000  # Filter for 500k+ views
                         )
                         
                         if not video_items:
@@ -190,6 +208,7 @@ def optimized_collection_test(keyword: str, target_count: int = 100) -> None:
                     f"Collection Complete!\n\n"
                     f"Keyword: {keyword}\n"
                     f"Target: {target_count} videos\n"
+                    f"Min Views: 500,000\n"
                     f"Collected: {total_collected} new videos\n"
                     f"Skipped: {total_skipped} duplicates\n"
                     f"Time: {elapsed_time:.2f} seconds\n"
@@ -203,11 +222,12 @@ def optimized_collection_test(keyword: str, target_count: int = 100) -> None:
             total_in_db = database_service.get_video_count()
             console.print(f"\n[cyan]Total videos in database:[/cyan] [green]{total_in_db}[/green]")
             
-            # Show sample videos
-            console.print("\n[cyan]Sample videos collected:[/cyan]")
+            # Show sample videos with view counts
+            console.print("\n[cyan]Sample videos collected (500k+ views only):[/cyan]")
             for i in range(1, 4):
-                video = database_service.video_exists(f"video_{i:03d}")
-                console.print(f"  {i}. video_{i:03d} exists: {video}")
+                video_id = f"video_{i:03d}"
+                exists = database_service.video_exists(video_id)
+                console.print(f"  {i}. {video_id} exists: {exists}")
 
 
 def main():

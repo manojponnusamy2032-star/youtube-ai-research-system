@@ -186,7 +186,8 @@ class YouTubeService:
     def search_and_get_details(
         self,
         keyword: str,
-        max_results: int = 50
+        max_results: int = 50,
+        min_views: int = 0
     ) -> List[Dict[str, Any]]:
         """
         Search for videos and retrieve their full metadata.
@@ -196,6 +197,7 @@ class YouTubeService:
         Args:
             keyword: Search keyword
             max_results: Maximum number of results
+            min_views: Minimum view count filter (default: 0)
             
         Returns:
             List of video items with full metadata
@@ -210,6 +212,18 @@ class YouTubeService:
         
         # Get detailed metadata
         detailed_videos = self.get_video_details(video_ids)
+        
+        # Filter by minimum views if specified
+        if min_views > 0:
+            filtered_videos = []
+            for video in detailed_videos:
+                statistics = video.get("statistics", {})
+                view_count = int(statistics.get("viewCount", 0))
+                if view_count >= min_views:
+                    filtered_videos.append(video)
+            
+            logger.info(f"Filtered to {len(filtered_videos)} videos with >= {min_views:,} views")
+            return filtered_videos
         
         return detailed_videos
     
@@ -246,6 +260,9 @@ class YouTubeService:
             if not thumbnail_url and "default" in thumbnails:
                 thumbnail_url = thumbnails["default"]["url"]
             
+            # Extract view count for logging
+            view_count = int(statistics.get("viewCount", 0))
+            
             video = Video(
                 video_id=video_id,
                 title=snippet["title"],
@@ -254,7 +271,7 @@ class YouTubeService:
                 channel_id=snippet["channelId"],
                 published_at=published_at,
                 duration=content_details.get("duration", ""),
-                view_count=int(statistics.get("viewCount", 0)),
+                view_count=view_count,
                 like_count=int(statistics.get("likeCount", 0)),
                 comment_count=int(statistics.get("commentCount", 0)),
                 thumbnail_url=thumbnail_url,
@@ -262,6 +279,7 @@ class YouTubeService:
                 search_keyword=search_keyword
             )
             
+            logger.debug(f"Parsed video: {video_id} - {view_count:,} views")
             return video
             
         except (KeyError, ValueError) as e:
