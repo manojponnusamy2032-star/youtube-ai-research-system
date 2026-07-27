@@ -1,0 +1,21 @@
+# YouTube AI Research System (YAIRS) - Collector Agent Dependencies
+# Python 3.13
+
+# Core dependencies
+pydantic>=2.0.0
+requests>=2.31.0
+
+# CLI and UI
+rich>=13.0.0
+
+# Database
+# SQLite is part of Python standard library - no external package needed
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Code quality
+black>=23.0.0
+flake8>=6.1.0
+mypy>=1.5.0
