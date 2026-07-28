@@ -404,7 +404,7 @@ class TestCollectorAgent:
         
         assert new_count == 1
         assert skipped_count == 0
-        youtube_service.search_and_get_details.assert_called_once_with("python", 10)
+        youtube_service.search_and_get_details.assert_called_once_with("python", 10, min_views=500_000)
         database_service.insert_videos_batch.assert_called_once()
     
     def test_run_with_empty_keyword(self, mock_services):
@@ -422,6 +422,32 @@ class TestCollectorAgent:
         
         with pytest.raises(ValueError, match="max_results must be between 1 and 50"):
             agent.run("python", 100)
+
+    def test_run_batch_with_stickman_keywords(self, mock_services):
+        """Test batch collection totals with stickman keywords."""
+        youtube_service, database_service = mock_services
+
+        stickman_keywords = [
+            "stickman animation",
+            "stickman fight",
+            "stickman vs",
+            "stickman short",
+            "stickman comedy",
+            "stickman drawing",
+            "stickman tutorial",
+            "stickman movie",
+            "stickman game",
+            "stickman cartoon"
+        ]
+
+        agent = CollectorAgent(youtube_service, database_service)
+
+        with patch.object(agent, "run", return_value=(5, 45)) as run_mock:
+            new_count, skipped_count = agent.run_batch(stickman_keywords, 50)
+
+        assert new_count == 50
+        assert skipped_count == 450
+        assert run_mock.call_count == len(stickman_keywords)
 
 
 # ============================================================================

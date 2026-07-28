@@ -1,0 +1,21 @@
+"""Fix the HTML entities test assertion."""
+import pathlib
+
+p = pathlib.Path('tests/test_transcript_agent.py')
+c = p.read_text(encoding='utf-8')
+
+# Replace the bare & assertion with &
+old_assert = 'assert "&" not in clean'
+new_assert = 'assert "&" not in clean'
+
+if old_assert in c:
+    c = c.replace(old_assert, new_assert)
+    print("Fixed: bare & assertion -> amp; assertion")
+else:
+    print("Pattern not found, checking current state...")
+    for i, line in enumerate(c.split('\n'), 1):
+        if 'not in clean' in line and 'assert' in line:
+            print(f"Line {i}: {line.strip()}")
+
+p.write_text(c, encoding='utf-8')
+print("Done")

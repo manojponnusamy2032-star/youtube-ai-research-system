@@ -218,12 +218,53 @@ def demo_collector_agent():
     console.print("  4. Save to SQLite database")
     console.print("  5. Print collection summary")
     
-    # Run the agent
+    # Run the agent (single keyword)
     new_count, skipped_count = agent.run("python", 10)
     
     console.print(f"\n[green]✓[/green] Collection complete!")
     console.print(f"  New videos: {new_count}")
     console.print(f"  Skipped: {skipped_count}")
+
+
+def demo_stickman_batch_collection():
+    """Demonstrate batch collection with stickman-related keywords."""
+    console.print("\n[bold cyan]═══ Demo 5: Stickman Batch Collection ═══[/bold cyan]\n")
+
+    from unittest.mock import Mock
+    from src.services.youtube_service import YouTubeService
+    from src.database.database_service import DatabaseService
+    from src.agents.collector_agent import CollectorAgent
+
+    stickman_keywords = [
+        "stickman animation",
+        "stickman fight",
+        "stickman vs",
+        "stickman short",
+        "stickman comedy",
+        "stickman drawing",
+        "stickman tutorial",
+        "stickman movie",
+        "stickman game",
+        "stickman cartoon"
+    ]
+
+    youtube_service = Mock(spec=YouTubeService)
+    database_service = Mock(spec=DatabaseService)
+    agent = CollectorAgent(youtube_service, database_service)
+
+    # Mock per-keyword results: 50 results each, 5 new, 45 skipped
+    youtube_service.search_and_get_details.return_value = [
+        {"id": f"vid{i}"} for i in range(50)
+    ]
+    youtube_service.parse_video_item.side_effect = Exception("Skip parsing in demo")
+    database_service.insert_videos_batch.return_value = (5, 45)
+
+    new_count, skipped_count = agent.run_batch(stickman_keywords, 50)
+
+    console.print(f"\n[green]✓[/green] Stickman batch collection demo complete!")
+    console.print(f"  Keywords: {len(stickman_keywords)}")
+    console.print(f"  Total new videos: {new_count}")
+    console.print(f"  Total skipped: {skipped_count}")
 
 
 def main():
@@ -239,6 +280,7 @@ def main():
         demo_database()
         demo_youtube_service()
         demo_collector_agent()
+        demo_stickman_batch_collection()
         
         console.print("\n[bold green]═══ All Demos Completed Successfully! ═══[/bold green]\n")
         

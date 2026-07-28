@@ -129,7 +129,7 @@ class CollectorAgent:
             # Step 1: Search YouTube and get details
             self.console.print(f"[cyan]Searching YouTube for:[/cyan] {keyword}")
             video_items = self.youtube_service.search_and_get_details(
-                keyword, max_results
+                keyword, max_results, min_views=500_000
             )
             found_count = len(video_items)
             
@@ -182,6 +182,9 @@ class CollectorAgent:
         """
         total_new = 0
         total_skipped = 0
+        total_found = 0
+        total_keywords = len(keywords)
+        expected_max = total_keywords * max_results_per_keyword
         
         self._print_banner()
         
@@ -190,6 +193,7 @@ class CollectorAgent:
                 new, skipped = self.run(keyword, max_results_per_keyword)
                 total_new += new
                 total_skipped += skipped
+                total_found += new + skipped
             except Exception as e:
                 logger.error(f"Failed to collect for keyword '{keyword}': {e}")
                 self.console.print(
@@ -201,6 +205,10 @@ class CollectorAgent:
         self.console.print()
         final_text = (
             f"[bold]Batch Collection Complete[/bold]\n\n"
+            f"Keywords processed: {total_keywords}\n"
+            f"Max results per keyword: {max_results_per_keyword}\n"
+            f"Expected max results: {expected_max}\n"
+            f"Total found (new + skipped): {total_found}\n"
             f"Total new videos: {total_new}\n"
             f"Total skipped: {total_skipped}"
         )
