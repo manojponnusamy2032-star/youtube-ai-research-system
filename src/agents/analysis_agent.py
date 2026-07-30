@@ -13,6 +13,8 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 
+from src.core.base_agent import BaseAgent
+
 from src.models.transcript import Transcript
 from src.services.analysis_service import AnalysisService, LLMProvider
 from src.database.database_service import DatabaseService
@@ -20,24 +22,25 @@ from src.database.database_service import DatabaseService
 logger = logging.getLogger(__name__)
 
 
-class AnalysisAgent:
+class AnalysisAgent(BaseAgent):
     """
     Agent responsible for analyzing video transcripts.
-    
+
     Fetches transcripts without analysis from the database, analyzes them
     using the AnalysisService and LLM, and stores results with model tracking.
-    
+
     Attributes:
         analysis_service: AnalysisService instance
         database_service: DatabaseService instance
         console: Rich console for formatted output
     """
-    
+
     def __init__(
         self,
         analysis_service: AnalysisService,
         database_service: DatabaseService
     ) -> None:
+        super().__init__("AnalysisAgent")
         """
         Initialize the Analysis Agent.
         
@@ -119,6 +122,7 @@ class AnalysisAgent:
             Tuple of (analyzed_count, failed_count, skipped_count)
         """
         self._print_banner()
+        self.start()
         
         # Fetch transcripts without analysis
         self.console.print("[cyan]Fetching transcripts without analysis...[/cyan]")

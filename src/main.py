@@ -16,6 +16,8 @@ import logging
 from rich.console import Console
 from rich.prompt import Prompt
 
+from src.core.bootstrap import create_manager
+
 from src.utils.config import config
 from src.utils.logger import setup_logger
 from src.services.youtube_service import YouTubeService, YouTubeAPIError
