@@ -69,3 +69,9 @@ Thumbs.db
 
 # Project specific
 youtube.db
+# Frontend
+node_modules/
+.next/
+frontend/node_modules/
+frontend/.next/
+frontend/package-lock.json
