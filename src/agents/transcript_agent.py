@@ -16,12 +16,13 @@ from src.models.transcript import TranscriptMethod
 from src.services.transcript_service import TranscriptService
 from src.database.database_service import DatabaseService
 
+from src.core.base_agent import BaseAgent
 logger = logging.getLogger(__name__)
 
 
-class TranscriptAgent:
+class TranscriptAgent(BaseAgent):
     """
-    Agent responsible for downloading video transcripts.
+    Agent responsible for downloading video transcripts.    Agent responsible for downloading video transcripts.
     
     Fetches videos without transcripts from the database, retrieves
     transcripts using the TranscriptService fallback chain, and stores
@@ -45,6 +46,7 @@ class TranscriptAgent:
             transcript_service: TranscriptService instance
             database_service: DatabaseService instance
         """
+        super().__init__("TranscriptAgent")
         self.transcript_service = transcript_service
         self.database_service = database_service
         self.console = Console()

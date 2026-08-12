@@ -20,13 +20,21 @@ src/
 ├── database/         # Database service and migrations
 ├── utils/            # Utilities (logger, config, helpers)
 ├── prompts/          # AI prompt templates
-└── main.py          # Application entry point
+└── main.py           # Application entry point
 
 data/
-└── database/        # SQLite database files
+└── database/         # SQLite database files
 
-tests/               # Unit and integration tests
+frontend/             # Frontend app (Next.js)
+
+tests/                # Unit and integration tests
 ```
+
+## Prerequisites
+
+- Python 3.13 or newer
+- Node.js and npm (for frontend)
+- SQLite (bundled with Python — no separate server required)
 
 ## Installation
 
@@ -35,131 +43,74 @@ tests/               # Unit and integration tests
 git clone https://github.com/manojponnusamy2032-star/youtube-ai-research-system.git
 cd youtube-ai-research-system
 
-# Create virtual environment
+# Create and activate a Python virtual environment
 python -m venv venv
-
-# Activate virtual environment
-# Windows:
+# Windows
 venv\Scripts\activate
-# Linux/Mac:
+# Linux / macOS
 source venv/bin/activate
 
-# Install dependencies
+# Install backend dependencies
 pip install -r requirements.txt
 ```
 
-## Configuration
+## Environment Setup
 
-Set the required environment variable:
-
-```bash
-# Windows (PowerShell)
-$env:YOUTUBE_API_KEY = "your-api-key-here"
-
-# Windows (CMD)
-set YOUTUBE_API_KEY=your-api-key-here
-
-# Linux/Mac
-export YOUTUBE_API_KEY=your-api-key-here
-```
-
-Or create a `.env` file in the project root:
-
-```
-YOUTUBE_API_KEY=your-api-key-here
-DATABASE_PATH=data/database/youtube.db
-DEFAULT_MAX_RESULTS=50
-LOG_LEVEL=INFO
-```
-
-## Usage
-
-### Run the Collector Agent
+1. Copy the example env file and edit values:
 
 ```bash
-python src/main.py
+cp .env.example .env
+# or on Windows (PowerShell):
+# copy .env.example .env
 ```
 
-This will start an interactive CLI menu where you can:
-1. Collect videos for a single keyword
-2. Collect videos for multiple keywords (batch mode)
-3. View database statistics
-4. Exit the application
+2. Open `.env` and provide real values for:
+- `YOUTUBE_API_KEY` — required for collector functionality
+- `API_KEY` — optional API key to protect the backend
+- `OLLAMA_BASE_URL` / `OLLAMA_MODEL` — if using Ollama for LLMs
+- `NEXT_PUBLIC_API_BASE` — frontend API base (e.g. http://localhost:8000)
 
-### Example Output
+See `.env.example` for all supported variables and safe placeholders.
 
-```
--------------------------------------
-YAIRS Collector Agent
--------------------------------------
+## Run Backend
 
-Searching keyword:
-psychology
+From the project root (with your virtualenv activated):
 
-Found:
-50 videos
-
-New:
-48
-
-Skipped:
-2 duplicates
-
-Database updated successfully.
+```bash
+# Start the FastAPI backend (development with auto-reload)
+python -m uvicorn src.api.app:app --reload
 ```
 
-## Architecture
+API docs will be available at http://127.0.0.1:8000/docs by default.
 
-### Video Model (`src/models/video.py`)
-Pydantic model representing YouTube video metadata with validation.
+## Run Frontend
 
-### YouTube Service (`src/services/youtube_service.py`)
-- Handles YouTube Data API v3 interactions
-- Implements retry logic with exponential backoff
-- Parses API responses into Video models
+The frontend lives in `frontend/`. Install dependencies and run the dev server:
 
-### Database Service (`src/database/database_service.py`)
-- SQLite database management
-- Automatic schema creation
-- Duplicate detection based on video_id
-- Batch insertion support
+```bash
+cd frontend
+npm install
+# Development server (if available)
+npm run dev
+# Build for production
+npm run build
+```
 
-### Collector Agent (`src/agents/collector_agent.py`)
-- Orchestrates the collection workflow
-- Dependency injection for services
-- Rich terminal output
-- Comprehensive error handling
+The frontend uses `NEXT_PUBLIC_API_BASE` to locate the backend API — update it in `.env` if needed.
 
-## Development
+## Run Tests
 
-### Run Tests
+Unit and integration tests can be executed with pytest:
 
 ```bash
 pytest tests/ -v
 ```
 
-### Code Formatting
+## Additional Notes
 
-```bash
-black src/ tests/
-```
-
-### Type Checking
-
-```bash
-mypy src/
-```
-
-### Linting
-
-```bash
-flake8 src/ tests/
-```
-
-## Requirements
-
-- Python 3.13+
-- YouTube Data API v3 key ([Get one here](https://console.cloud.google.com/apis/credentials))
+- Use `.env.example` as the starting point for environment variables.
+- Keep API keys and secrets out of source control — add `.env` to `.gitignore`.
+- For backend debugging the project exposes a FastAPI app at `src.api.app:create_app` and can be started with uvicorn as shown above.
 
 ## License
 
@@ -167,4 +118,4 @@ MIT License
 
 ## Contributing
 
-Contributions are welcome! Please read the contributing guidelines before submitting PRs.
+Contributions are welcome! Please open issues or pull requests and follow the repository's contribution guidelines.

@@ -19,7 +19,8 @@ from src.database.database_service import DatabaseService
 logger = logging.getLogger(__name__)
 
 
-class CollectorAgent:
+from src.core.base_agent import BaseAgent
+class CollectorAgent(BaseAgent):
     """
     Agent responsible for collecting YouTube video metadata.
     
@@ -35,18 +36,21 @@ class CollectorAgent:
     def __init__(
         self,
         youtube_service: YouTubeService,
-        database_service: DatabaseService
+        database_service: DatabaseService,
     ) -> None:
         """
         Initialize the Collector Agent.
-        
+
         Args:
             youtube_service: YouTube API service instance
             database_service: Database service instance
         """
+        super().__init__("TranscriptAgent")
+
         self.youtube_service = youtube_service
         self.database_service = database_service
         self.console = Console()
+
         logger.info("Collector Agent initialized")
     
     def _print_banner(self) -> None:

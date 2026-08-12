@@ -368,6 +368,9 @@ class TranscriptService:
         import html as html_module
         text = html_module.unescape(text)
         
+        # Remove residual ampersands that are not part of valid entities
+        text = text.replace('&', '').replace('&', '')
+        
         # Remove leading/trailing whitespace per line
         lines = [line.strip() for line in text.split('\n')]
         text = '\n'.join(line for line in lines if line)

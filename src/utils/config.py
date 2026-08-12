@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
+from dotenv import load_dotenv
+
 
 class Config:
     """
@@ -22,34 +24,59 @@ class Config:
     def __init__(self, validate: bool = True) -> None:
         """
         Initialize and validate configuration.
-        
+
         Args:
-            validate: Whether to validate configuration (default: True)
+            validate: Whether to validate configuration.
         """
+
         # Base paths
         self.BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent
+
+        # Load .env from project root
+        load_dotenv(self.BASE_DIR / ".env")
+
         self.DATA_DIR: Path = self.BASE_DIR / "data"
         self.LOGS_DIR: Path = self.BASE_DIR / "logs"
-        
+
         # YouTube API
         self.YOUTUBE_API_KEY: str = os.getenv("YOUTUBE_API_KEY", "")
-        
+
         # Database
-        self.DATABASE_PATH: str = os.getenv("DATABASE_PATH", "data/database/youtube.db")
-        
+        self.DATABASE_PATH: str = os.getenv(
+            "DATABASE_PATH",
+            "data/database/youtube.db",
+        )
+
         # Collection defaults
-        self.DEFAULT_MAX_RESULTS: int = int(os.getenv("DEFAULT_MAX_RESULTS", "50"))
-        self.DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "en")
-        self.DEFAULT_REGION: str = os.getenv("DEFAULT_REGION", "US")
-        
+        self.DEFAULT_MAX_RESULTS: int = int(
+            os.getenv("DEFAULT_MAX_RESULTS", "50")
+        )
+
+        self.DEFAULT_LANGUAGE: str = os.getenv(
+            "DEFAULT_LANGUAGE",
+            "en",
+        )
+
+        self.DEFAULT_REGION: str = os.getenv(
+            "DEFAULT_REGION",
+            "US",
+        )
+
         # Logging
-        self.LOG_LEVEL: int = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper())
-        self.LOG_FILE: str = os.getenv("LOG_FILE", "logs/yairs.log")
-        
+        self.LOG_LEVEL: int = getattr(
+            logging,
+            os.getenv("LOG_LEVEL", "INFO").upper(),
+        )
+
+        self.LOG_FILE: str = os.getenv(
+            "LOG_FILE",
+            "logs/yairs.log",
+        )
+
         if validate:
             self._validate()
+
         self._ensure_directories()
-    
     def _validate(self) -> None:
         """Validate configuration values."""
         if not self.YOUTUBE_API_KEY:

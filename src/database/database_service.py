@@ -6,13 +6,19 @@ schema creation, video insertion, transcript storage, and duplicate detection.
 """
 
 import logging
+import json
 import sqlite3
+import threading
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from src.models.video import Video
-from src.models.transcript import Transcript, TranscriptStatus
+from src.models.transcript import Transcript, TranscriptMethod, TranscriptStatus
 from src.models.analysis import Analysis
+
+from src.models.idea import Idea
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +43,11 @@ class DatabaseService:
             db_path: Path to the SQLite database file (default: data/database/youtube.db)
         """
         self.db_path = db_path
-        self.connection: Optional[sqlite3.Connection] = None
+        # thread-local storage for per-thread connections
+        self._local = threading.local()
+        # lock protects creation/teardown of per-thread connections
+        self._conn_lock = threading.RLock()
+        self._connected = False
         self._ensure_database_directory()
     
     def _ensure_database_directory(self) -> None:
@@ -46,22 +56,80 @@ class DatabaseService:
         db_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Database directory ensured at: {db_dir}")
     
+    @property
+    def connection(self) -> Optional[sqlite3.Connection]:
+        """Return a thread-local sqlite3 connection if connected, else None.
+
+        Connections are created per-thread with check_same_thread=False and
+        WAL journaling for safer concurrent readers/writers.
+        """
+        if not getattr(self, "_connected", False):
+            return None
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            with self._conn_lock:
+                # Re-check inside lock
+                conn = getattr(self._local, "conn", None)
+                if conn is None:
+                    try:
+                        # Add a timeout to avoid immediate 'database is locked' failures
+                        conn = sqlite3.connect(
+                            self.db_path,
+                            check_same_thread=False,
+                            detect_types=sqlite3.PARSE_DECLTYPES,
+                            timeout=30.0,
+                        )
+                        conn.row_factory = sqlite3.Row
+                        # Pragmas for improved concurrency and safety
+                        try:
+                            conn.execute("PRAGMA journal_mode=WAL;")
+                            conn.execute("PRAGMA synchronous=NORMAL;")
+                            # Allow some time waiting when DB is busy instead of failing fast
+                            conn.execute("PRAGMA busy_timeout = 5000;")
+                            # Do not force foreign_keys pragma to preserve backward compatibility with tests and older deployments
+                            # conn.execute("PRAGMA foreign_keys = ON;")
+                        except sqlite3.Error:
+                            # Some SQLite builds may not support these pragmas; ignore failures
+                            pass
+                        self._local.conn = conn
+                        logger.debug("Opened DB connection for thread %s", threading.get_ident())
+                    except sqlite3.Error as e:
+                        logger.error("Failed to open DB connection for thread %s: %s", threading.get_ident(), e)
+                        raise
+        return conn
+
     def connect(self) -> None:
-        """Establish connection to the SQLite database."""
+        """Mark service as connected and ensure a connection for the current thread.
+
+        Safe to call from multiple threads; connection creation is guarded by an RLock.
+        """
         try:
-            self.connection = sqlite3.connect(self.db_path)
-            self.connection.row_factory = sqlite3.Row
-            logger.info(f"Connected to database: {self.db_path}")
+            with self._conn_lock:
+                # create a connection for the current thread
+                self._connected = True
+                _ = self.connection  # triggers creation
+            logger.info(f"Database connected (per-thread connections enabled): {self.db_path}")
         except sqlite3.Error as e:
             logger.error(f"Failed to connect to database: {e}")
+            self._connected = False
             raise
     
     def disconnect(self) -> None:
-        """Close the database connection."""
-        if self.connection:
-            self.connection.close()
-            self.connection = None
-            logger.info("Database connection closed")
+        """Close the current thread's database connection and mark as disconnected.
+
+        Note: other threads may still hold connections; they will be closed when those threads exit.
+        """
+        with self._conn_lock:
+            conn = getattr(self._local, "conn", None)
+            if conn:
+                try:
+                    conn.close()
+                except sqlite3.Error:
+                    logger.exception("Error closing DB connection for thread %s", threading.get_ident())
+                finally:
+                    self._local.conn = None
+            self._connected = False
+        logger.info("Database connection closed for current thread and service marked disconnected")
     
     def create_tables(self) -> None:
         """
@@ -175,6 +243,141 @@ class DatabaseService:
         );
         """
 
+        create_generated_titles_table = """
+        CREATE TABLE IF NOT EXISTS generated_titles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            title TEXT NOT NULL,
+            pattern TEXT NOT NULL,
+            emotion TEXT NOT NULL,
+            formula TEXT NOT NULL,
+            estimated_ctr REAL NOT NULL,
+            confidence REAL NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        create_generated_hooks_table = """
+        CREATE TABLE IF NOT EXISTS generated_hooks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            hook_type TEXT NOT NULL,
+            script TEXT NOT NULL,
+            retention_score REAL NOT NULL,
+            candidates_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        create_generated_thumbnails_table = """
+        CREATE TABLE IF NOT EXISTS generated_thumbnails (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            concept TEXT NOT NULL,
+            layout TEXT NOT NULL,
+            text_overlay TEXT NOT NULL,
+            color_palette TEXT NOT NULL,
+            emotion TEXT NOT NULL,
+            image_prompt TEXT NOT NULL,
+            thumbnail_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        create_generated_scripts_table = """
+        CREATE TABLE IF NOT EXISTS generated_scripts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            intro TEXT NOT NULL,
+            sections_json TEXT NOT NULL,
+            cta TEXT NOT NULL,
+            estimated_duration_minutes INTEGER NOT NULL,
+            script_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        create_scripts_table = """
+        CREATE TABLE IF NOT EXISTS scripts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            idea_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            hook TEXT NOT NULL,
+            introduction TEXT NOT NULL,
+            body TEXT NOT NULL,
+            conclusion TEXT NOT NULL,
+            call_to_action TEXT NOT NULL,
+            estimated_duration INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        create_generated_seo_table = """
+        CREATE TABLE IF NOT EXISTS generated_seo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            description TEXT NOT NULL,
+            keywords_json TEXT NOT NULL,
+            hashtags_json TEXT NOT NULL,
+            tags_json TEXT NOT NULL,
+            chapters_json TEXT NOT NULL,
+            seo_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        create_content_packages_table = """
+        CREATE TABLE IF NOT EXISTS content_packages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic TEXT NOT NULL,
+            best_title_json TEXT NOT NULL,
+            thumbnail_json TEXT NOT NULL,
+            hook_json TEXT NOT NULL,
+            script_json TEXT NOT NULL,
+            seo_json TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            package_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+
+        create_workflows_table = """
+        CREATE TABLE IF NOT EXISTS workflows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workflow_id TEXT UNIQUE NOT NULL,
+            workflow_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            result_json TEXT,
+            error_text TEXT,
+            progress_percentage INTEGER DEFAULT 0,
+            current_stage TEXT,
+            processed_videos INTEGER DEFAULT 0,
+            failed_videos INTEGER DEFAULT 0,
+            retry_count INTEGER DEFAULT 0,
+            timeout_reason TEXT,
+            started_at TEXT,
+            last_stage_at TEXT,
+            duration_seconds REAL DEFAULT 0.0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            completed_at TEXT
+        );
+        """
+
+        create_workflow_logs_table = """
+        CREATE TABLE IF NOT EXISTS workflow_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workflow_id TEXT NOT NULL,
+                    stage TEXT,
+                    status TEXT,
+                    level TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    error_text TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+
         create_indexes_query = """
         CREATE INDEX IF NOT EXISTS idx_video_id ON videos(video_id);
         CREATE INDEX IF NOT EXISTS idx_search_keyword ON videos(search_keyword);
@@ -188,6 +391,15 @@ class DatabaseService:
         CREATE INDEX IF NOT EXISTS idx_pattern_stats_category ON pattern_statistics(category);
         CREATE INDEX IF NOT EXISTS idx_recommendations_category ON recommendations(category);
         CREATE INDEX IF NOT EXISTS idx_recommendations_priority ON recommendations(priority);
+        CREATE INDEX IF NOT EXISTS idx_generated_titles_topic ON generated_titles(topic);
+        CREATE INDEX IF NOT EXISTS idx_generated_hooks_topic ON generated_hooks(topic);
+        CREATE INDEX IF NOT EXISTS idx_generated_thumbnails_topic ON generated_thumbnails(topic);
+        CREATE INDEX IF NOT EXISTS idx_generated_scripts_topic ON generated_scripts(topic);
+        CREATE INDEX IF NOT EXISTS idx_generated_seo_topic ON generated_seo(topic);
+        CREATE INDEX IF NOT EXISTS idx_content_packages_topic ON content_packages(topic);
+        CREATE INDEX IF NOT EXISTS idx_workflows_workflow_id ON workflows(workflow_id);
+        CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status);
+        CREATE INDEX IF NOT EXISTS idx_workflow_logs_workflow_id ON workflow_logs(workflow_id);
         """
         
         try:
@@ -198,11 +410,151 @@ class DatabaseService:
             cursor.execute(create_pattern_reports_table)
             cursor.execute(create_pattern_statistics_table)
             cursor.execute(create_recommendations_table)
+            cursor.execute(create_generated_titles_table)
+            cursor.execute(create_generated_hooks_table)
+            cursor.execute(create_generated_thumbnails_table)
+            cursor.execute(create_generated_scripts_table)
+            cursor.execute(create_scripts_table)
+            cursor.execute(create_generated_seo_table)
+            cursor.execute(create_content_packages_table)
+            cursor.execute(create_workflows_table)
+            cursor.execute(create_workflow_logs_table)
             cursor.executescript(create_indexes_query)
             self.connection.commit()
             logger.info("Database tables and indexes created successfully")
         except sqlite3.Error as e:
-            logger.error(f"Failed to create tables: {e}")
+            logger.exception("Failed to create tables: %s", e)
+            raise
+        # Ensure migrations table exists and record baseline if necessary
+        try:
+            self._ensure_migrations_table()
+        except Exception:
+            # Non-fatal: migrations are advisory and should not block startup
+            logger.exception("Failed to ensure migrations table after create_tables")
+
+        # Ensure additional workflow columns exist for older DBs
+        try:
+            self._ensure_workflow_columns()
+        except Exception:
+            logger.exception("Failed to ensure workflow columns")
+
+    def _ensure_migrations_table(self) -> None:
+        """Create schema_migrations table if missing and record baseline state.
+
+        This provides a lightweight migration ledger so future schema changes
+        can be applied in a controlled way. If the migrations table is empty
+        on first run, record a baseline marker to avoid reapplying initial schema.
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        create_migrations_table = """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            id TEXT PRIMARY KEY,
+            applied_at TEXT NOT NULL,
+            description TEXT
+        );
+        """
+        try:
+            with self.transaction() as cur:
+                cur.execute(create_migrations_table)
+                # If no records exist, insert a baseline record to mark current schema
+                cur.execute("SELECT COUNT(*) FROM schema_migrations")
+                row = cur.fetchone()
+                if row and int(row[0]) == 0:
+                    cur.execute(
+                        "INSERT INTO schema_migrations (id, applied_at, description) VALUES (?, CURRENT_TIMESTAMP, ?)",
+                        ("baseline_2026_08_06", "Initial schema baseline"),
+                    )
+            logger.info("Ensured schema_migrations table and recorded baseline if needed")
+        except sqlite3.Error as e:
+            logger.exception("Failed to ensure migrations table: %s", e)
+            raise
+
+    def _ensure_workflow_columns(self) -> None:
+        """Ensure workflows and workflow_logs tables have new columns required for orchestration.
+
+        Uses PRAGMA table_info to detect missing columns and applies ALTER TABLE ADD COLUMN where needed.
+        This keeps existing databases backward compatible while enabling new features.
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        try:
+            cursor = self.connection.cursor()
+            # workflow columns to ensure
+            required = {
+                "workflows": {
+                    "retry_count": "INTEGER DEFAULT 0",
+                    "timeout_reason": "TEXT",
+                },
+                "workflow_logs": {
+                    "stage": "TEXT",
+                    "status": "TEXT",
+                    "error_text": "TEXT",
+                },
+            }
+            for table, cols in required.items():
+                cursor.execute(f"PRAGMA table_info({table})")
+                existing = {row[1] for row in cursor.fetchall()}
+                for col, col_def in cols.items():
+                    if col not in existing:
+                        try:
+                            logger.info("Adding missing column %s to table %s", col, table)
+                            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
+                        except sqlite3.Error:
+                            # ignore failures to add column (older SQLite, permission issues)
+                            logger.exception("Failed to add column %s to %s", col, table)
+            self.connection.commit()
+        except sqlite3.Error as e:
+            logger.exception("Failed to ensure workflow columns: %s", e)
+            try:
+                self.connection.rollback()
+            except Exception:
+                pass
+            raise
+
+    def apply_migrations(self, migrations: List[Dict[str, Any]]) -> List[str]:
+        """Apply a list of migrations.
+
+        Each migration is a dict containing:
+          - id: unique migration id
+          - description: short description
+          - sql: SQL string to execute (or 'up' for multi-statement)
+
+        Returns list of applied migration ids.
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        applied: List[str] = []
+        try:
+            # Read already applied migrations
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT id FROM schema_migrations")
+            rows = cursor.fetchall()
+            seen = {r[0] for r in rows}
+
+            for mig in migrations:
+                mid = mig.get("id")
+                desc = mig.get("description", "")
+                sql = mig.get("sql")
+                if mid in seen:
+                    logger.debug("Skipping already-applied migration: %s", mid)
+                    continue
+                logger.info("Applying migration: %s - %s", mid, desc)
+                # Apply migration inside transaction
+                with self.transaction() as cur:
+                    if isinstance(sql, str):
+                        # allow multi-statement scripts
+                        cur.executescript(sql)
+                    else:
+                        raise ValueError("Migration 'sql' must be a string containing SQL statements")
+                    cur.execute(
+                        "INSERT INTO schema_migrations (id, applied_at, description) VALUES (?, CURRENT_TIMESTAMP, ?)",
+                        (mid, desc),
+                    )
+                applied.append(mid)
+            return applied
+        except sqlite3.Error as e:
+            logger.exception("Failed to apply migrations: %s", e)
             raise
     
     def insert_video(self, video: Video) -> bool:
@@ -879,13 +1231,861 @@ class DatabaseService:
         except sqlite3.Error as e:
             logger.error(f"Failed to get analysis with video data: {e}")
             raise
+
+    # ------------------------------------------------------------------
+    # Title generation operations
+    # ------------------------------------------------------------------
+
+    def insert_generated_titles(self, topic: str, titles: List[Dict[str, Any]]) -> int:
+        """
+        Insert generated title candidates for a topic.
+
+        Args:
+            topic: Topic these titles were generated for
+            titles: List of title metadata dictionaries
+
+        Returns:
+            Number of inserted rows
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+
+        if not titles:
+            return 0
+
+        query = """
+        INSERT INTO generated_titles (
+            topic, title, pattern, emotion, formula, estimated_ctr, confidence
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        payload = [
+            (
+                topic,
+                str(item.get("title", "")),
+                str(item.get("pattern_used", "")),
+                str(item.get("emotion", "")),
+                str(item.get("title_formula", "")),
+                float(item.get("estimated_ctr", 0.0)),
+                float(item.get("confidence", 0.0)),
+            )
+            for item in titles
+        ]
+
+        try:
+            cursor = self.connection.cursor()
+            cursor.executemany(query, payload)
+            self.connection.commit()
+            return len(payload)
+        except sqlite3.Error as e:
+            logger.error(f"Failed to insert generated titles: {e}")
+            self.connection.rollback()
+            raise
+
+    def get_generated_titles(
+        self,
+        topic: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch generated titles, optionally filtered by topic.
+
+        Args:
+            topic: Topic to filter by
+            limit: Max rows to return
+
+        Returns:
+            List of generated title rows as dictionaries
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+
+        filters = []
+        params: list[Any] = []
+        if topic:
+            filters.append("topic = ?")
+            params.append(topic)
+        if start_date:
+            filters.append("created_at >= ?")
+            params.append(start_date)
+        if end_date:
+            filters.append("created_at <= ?")
+            params.append(end_date)
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        query = f"SELECT * FROM generated_titles {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.error(f"Failed to get generated titles: {e}")
+            raise
+
+    # ------------------------------------------------------------------
+    # Content generation operations
+    # ------------------------------------------------------------------
+
+    def insert_generated_hook(
+        self,
+        topic: str,
+        hook: Dict[str, Any],
+        candidates: List[Dict[str, Any]],
+    ) -> int:
+        """Insert generated hook and its candidate set."""
+        return self._insert_and_commit(
+            """
+            INSERT INTO generated_hooks (
+                topic, hook_type, script, retention_score, candidates_json
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                topic,
+                str(hook.get("hook_type", "")),
+                str(hook.get("script", "")),
+                float(hook.get("retention_score", 0.0)),
+                json.dumps(candidates),
+            ),
+        )
+
+    def get_generated_hooks(self, topic: Optional[str] = None, limit: int = 20, offset: int = 0, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve generated hooks with optional filtering and pagination."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        filters = []
+        params: list[Any] = []
+        if topic:
+            filters.append("topic = ?")
+            params.append(topic)
+        if start_date:
+            filters.append("created_at >= ?")
+            params.append(start_date)
+        if end_date:
+            filters.append("created_at <= ?")
+            params.append(end_date)
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        query = f"SELECT * FROM generated_hooks {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.exception("Failed to fetch generated hooks: %s", e)
+            raise
+
+    def insert_generated_thumbnail(self, topic: str, thumbnail: Dict[str, Any]) -> int:
+        """Insert generated thumbnail strategy payload."""
+        return self._insert_and_commit(
+            """
+            INSERT INTO generated_thumbnails (
+                topic, concept, layout, text_overlay, color_palette, emotion, image_prompt, thumbnail_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                topic,
+                str(thumbnail.get("concept", "")),
+                str(thumbnail.get("layout", "")),
+                str(thumbnail.get("text", "")),
+                json.dumps(list(thumbnail.get("color_palette", []))),
+                str(thumbnail.get("emotion", "")),
+                str(thumbnail.get("image_prompt", "")),
+                json.dumps(thumbnail),
+            ),
+        )
+
+    def get_generated_thumbnails(self, topic: Optional[str] = None, limit: int = 20, offset: int = 0, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve generated thumbnails with optional filtering and pagination."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        filters = []
+        params: list[Any] = []
+        if topic:
+            filters.append("topic = ?")
+            params.append(topic)
+        if start_date:
+            filters.append("created_at >= ?")
+            params.append(start_date)
+        if end_date:
+            filters.append("created_at <= ?")
+            params.append(end_date)
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        query = f"SELECT * FROM generated_thumbnails {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.exception("Failed to fetch generated thumbnails: %s", e)
+            raise
+
+    def insert_generated_script(self, topic: str, script: Dict[str, Any]) -> int:
+        """Insert generated script payload."""
+        return self._insert_and_commit(
+            """
+            INSERT INTO generated_scripts (
+                topic, intro, sections_json, cta, estimated_duration_minutes, script_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                topic,
+                str(script.get("intro", "")),
+                json.dumps(list(script.get("sections", []))),
+                str(script.get("cta", "")),
+                int(script.get("estimated_duration_minutes", 0)),
+                json.dumps(script),
+            ),
+        )
+
+    def get_generated_scripts(self, topic: Optional[str] = None, limit: int = 20, offset: int = 0, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve generated scripts with optional filtering and pagination."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        filters = []
+        params: list[Any] = []
+        if topic:
+            filters.append("topic = ?")
+            params.append(topic)
+        if start_date:
+            filters.append("created_at >= ?")
+            params.append(start_date)
+        if end_date:
+            filters.append("created_at <= ?")
+            params.append(end_date)
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        query = f"SELECT * FROM generated_scripts {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.exception("Failed to fetch generated scripts: %s", e)
+            raise
+
+    def insert_generated_seo(self, topic: str, seo: Dict[str, Any]) -> int:
+        """Insert generated SEO payload."""
+        return self._insert_and_commit(
+            """
+            INSERT INTO generated_seo (
+                topic, description, keywords_json, hashtags_json, tags_json, chapters_json, seo_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                topic,
+                str(seo.get("description", "")),
+                json.dumps(list(seo.get("keywords", []))),
+                json.dumps(list(seo.get("hashtags", []))),
+                json.dumps(list(seo.get("tags", []))),
+                json.dumps(list(seo.get("chapters", []))),
+                json.dumps(seo),
+            ),
+        )
+
+    def get_generated_seo(self, topic: Optional[str] = None, limit: int = 20, offset: int = 0, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieve generated SEO entries with optional filtering and pagination."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        filters = []
+        params: list[Any] = []
+        if topic:
+            filters.append("topic = ?")
+            params.append(topic)
+        if start_date:
+            filters.append("created_at >= ?")
+            params.append(start_date)
+        if end_date:
+            filters.append("created_at <= ?")
+            params.append(end_date)
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        query = f"SELECT * FROM generated_seo {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.exception("Failed to fetch generated seo: %s", e)
+            raise
+
+    def insert_content_package(self, package: Dict[str, Any]) -> int:
+        """Insert finalized content package payload."""
+        return self._insert_and_commit(
+            """
+            INSERT INTO content_packages (
+                topic, best_title_json, thumbnail_json, hook_json, script_json, seo_json, confidence, package_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(package.get("topic", "")),
+                json.dumps(package.get("best_title", {})),
+                json.dumps(package.get("thumbnail", {})),
+                json.dumps(package.get("hook", {})),
+                json.dumps(package.get("script", {})),
+                json.dumps(package.get("seo", {})),
+                float(package.get("confidence", 0.0)),
+                json.dumps(package),
+            ),
+        )
+
+    def get_content_package_count(self) -> int:
+        """Return number of generated content packages."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM content_packages")
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    def get_content_packages(self, topic: str | None = None, limit: int = 20, offset: int = 0, sort: str = "desc") -> list[Dict[str, Any]]:
+        """Return content packages with optional topic filter, pagination, and sorting by created_at."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        order = "DESC" if sort.lower() == "desc" else "ASC"
+        if topic:
+            query = f"SELECT id, topic, best_title_json, package_json, created_at FROM content_packages WHERE topic = ? ORDER BY created_at {order} LIMIT ? OFFSET ?"
+            params = (topic, limit, offset)
+        else:
+            query = f"SELECT id, topic, best_title_json, package_json, created_at FROM content_packages ORDER BY created_at {order} LIMIT ? OFFSET ?"
+            params = (limit, offset)
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            results: list[Dict[str, Any]] = []
+            for r in rows:
+                d = dict(r)
+                try:
+                    d["best_title"] = json.loads(d.get("best_title_json") or "null")
+                except Exception:
+                    d["best_title"] = None
+                try:
+                    d["package_json"] = json.loads(d.get("package_json") or "null")
+                except Exception:
+                    d["package_json"] = {}
+                results.append({"id": d.get("id"), "topic": d.get("topic"), "best_title": d.get("best_title"), "created_at": d.get("created_at"), "package_json": d.get("package_json")})
+            return results
+        except sqlite3.Error as e:
+            logger.exception("Failed to query content packages: %s", e)
+            raise
+
+    def get_content_package_by_id(self, package_id: int) -> Dict[str, Any] | None:
+        """Return single content package by primary id."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        query = "SELECT id, topic, best_title_json, package_json, created_at FROM content_packages WHERE id = ?"
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, (package_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            try:
+                d["best_title"] = json.loads(d.get("best_title_json") or "null")
+            except Exception:
+                d["best_title"] = None
+            try:
+                d["package_json"] = json.loads(d.get("package_json") or "null")
+            except Exception:
+                d["package_json"] = {}
+            return {"id": d.get("id"), "topic": d.get("topic"), "best_title": d.get("best_title"), "created_at": d.get("created_at"), "package_json": d.get("package_json")}
+        except sqlite3.Error as e:
+            logger.exception("Failed to fetch content package id %s: %s", package_id, e)
+            raise
+
+    def create_workflow_record(self, workflow_id: str, workflow_type: str, payload: Dict[str, Any]) -> int:
+        """Create a persistent workflow record in the workflows table.
+
+        Args:
+            workflow_id: UUID string for the workflow
+            workflow_type: logical workflow type (e.g., 'research')
+            payload: original payload dict
+
+        Returns:
+            inserted row id
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        query = """
+        INSERT INTO workflows (workflow_id, workflow_type, status, payload_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """
+        try:
+            with self.transaction() as cur:
+                cur.execute(query, (workflow_id, workflow_type, "pending", json.dumps(payload)))
+                return int(cur.lastrowid)
+        except sqlite3.Error as e:
+            logger.exception("Failed to create workflow record %s: %s", workflow_id, e)
+            raise
+
+    def update_workflow_record(self, workflow_id: str, **changes: Any) -> None:
+        """Update fields of an existing workflow record.
+
+        Supported changes: status, result, error, completed_at, progress_percentage, current_stage,
+        processed_videos, failed_videos, started_at, last_stage_at, duration_seconds, retry_count, timeout_reason
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        fields = []
+        params: list[Any] = []
+        mapping = {
+            "status": ("status = ?", lambda v: str(v)),
+            "result": ("result_json = ?", lambda v: json.dumps(v)),
+            "error": ("error_text = ?", lambda v: str(v)),
+            "completed_at": ("completed_at = ?", lambda v: str(v)),
+            "progress_percentage": ("progress_percentage = ?", lambda v: int(v)),
+            "current_stage": ("current_stage = ?", lambda v: str(v)),
+            "processed_videos": ("processed_videos = ?", lambda v: int(v)),
+            "failed_videos": ("failed_videos = ?", lambda v: int(v)),
+            "started_at": ("started_at = ?", lambda v: str(v)),
+            "last_stage_at": ("last_stage_at = ?", lambda v: str(v)),
+            "duration_seconds": ("duration_seconds = ?", lambda v: float(v)),
+            "retry_count": ("retry_count = ?", lambda v: int(v)),
+            "timeout_reason": ("timeout_reason = ?", lambda v: str(v)),
+        }
+        for key, value in changes.items():
+            if key in mapping:
+                field_sql, conv = mapping[key]
+                fields.append(field_sql)
+                params.append(conv(value))
+        if not fields:
+            return
+        fields.append("updated_at = CURRENT_TIMESTAMP")
+        query = f"UPDATE workflows SET {', '.join(fields)} WHERE workflow_id = ?"
+        params.append(workflow_id)
+        try:
+            with self.transaction() as cur:
+                cur.execute(query, tuple(params))
+        except sqlite3.Error as e:
+            logger.exception("Failed to update workflow %s: %s", workflow_id, e)
+            raise
+
+    def get_workflow_record(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a workflow record by workflow_id."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        query = "SELECT * FROM workflows WHERE workflow_id = ?"
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, (workflow_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            record = dict(row)
+            # Parse JSON fields
+            if record.get("payload_json"):
+                try:
+                    record["payload"] = json.loads(record.get("payload_json"))
+                except Exception:
+                    record["payload"] = record.get("payload_json")
+            if record.get("result_json"):
+                try:
+                    record["result"] = json.loads(record.get("result_json"))
+                except Exception:
+                    record["result"] = record.get("result_json")
+            # Ensure numeric fields are proper types
+            for k in ("progress_percentage", "processed_videos", "failed_videos", "retry_count"):
+                if k in record and record[k] is not None:
+                    try:
+                        record[k] = int(record[k])
+                    except Exception:
+                        pass
+            return record
+        except sqlite3.Error as e:
+            logger.exception("Failed to fetch workflow %s: %s", workflow_id, e)
+            raise
+
+    def get_workflow_metrics(self) -> Dict[str, int]:
+        """Return aggregate counts for workflows by status."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT COUNT(*) FROM workflows")
+            total = int(cursor.fetchone()[0])
+            cursor.execute("SELECT COUNT(*) FROM workflows WHERE status = 'running'")
+            running = int(cursor.fetchone()[0])
+            cursor.execute("SELECT COUNT(*) FROM workflows WHERE status = 'completed'")
+            completed = int(cursor.fetchone()[0])
+            cursor.execute("SELECT COUNT(*) FROM workflows WHERE status = 'failed'")
+            failed = int(cursor.fetchone()[0])
+            cursor.execute("SELECT COUNT(*) FROM workflows WHERE status = 'queued' OR status = 'pending'")
+            queued = int(cursor.fetchone()[0])
+            return {
+                "workflows_total": total,
+                "workflows_queued": queued,
+                "workflows_running": running,
+                "workflows_completed": completed,
+                "workflows_failed": failed,
+            }
+        except sqlite3.Error as e:
+            logger.exception("Failed to compute workflow metrics: %s", e)
+            raise
+
+    def _execute_with_retry(self, fn, *args, retries: int = 3, backoff: float = 0.1, **kwargs):
+        """Execute a database callable with retries on OperationalError (e.g., database is locked).
+
+        fn is a callable that performs DB operations (like cursor.execute) and returns a value.
+        """
+        attempt = 0
+        while True:
+            try:
+                return fn(*args, **kwargs)
+            except sqlite3.OperationalError as e:
+                if attempt >= retries:
+                    logger.exception("Database operation failed after %s attempts: %s", retries + 1, e)
+                    raise
+                sleep_time = backoff * (2 ** attempt)
+                logger.warning("OperationalError on DB operation, retrying in %.2fs (attempt %d): %s", sleep_time, attempt + 1, e)
+                time.sleep(sleep_time)
+                attempt += 1
+
+    @contextmanager
+    def transaction(self):
+        """Context manager for transactions. Commits on success, rolls back on exception.
+
+        Commits are retried on sqlite3.OperationalError with exponential backoff to handle
+        transient 'database is locked' errors when multiple threads/processes access SQLite.
+
+        Usage:
+            with db.transaction() as cur:
+                cur.execute(...)
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        conn = self.connection
+        cur = conn.cursor()
+        try:
+            yield cur
+            # commit with retry for transient locking issues
+            attempt = 0
+            max_attempts = 4
+            backoff = 0.05
+            while True:
+                try:
+                    conn.commit()
+                    break
+                except sqlite3.OperationalError as e:
+                    if attempt >= max_attempts - 1:
+                        logger.exception("Failed to commit transaction after %d attempts: %s", max_attempts, e)
+                        raise
+                    sleep_time = backoff * (2 ** attempt)
+                    logger.warning("Commit failed due to OperationalError, retrying in %.2fs: %s", sleep_time, e)
+                    time.sleep(sleep_time)
+                    attempt += 1
+        except Exception:
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                logger.exception("Failed to rollback transaction for thread %s", threading.get_ident())
+            raise
+
+    def _insert_and_commit(self, query: str, params: tuple[Any, ...]) -> int:
+        """Execute an INSERT query and return inserted row id with strong error logging.
+
+        Uses transaction() which provides commit retry semantics and avoids leaving the
+        database in an inconsistent state on transient failures.
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        try:
+            with self.transaction() as cur:
+                # Use execute_with_retry wrapper around the cursor.execute call
+                def _exec(q, p):
+                    return cur.execute(q, p)
+
+                self._execute_with_retry(_exec, query, params)
+                return int(cur.lastrowid)
+        except sqlite3.Error as e:
+            logger.exception("Failed to execute insert query. Query=%s Params=%s Error=%s", query, params, e)
+            raise
+
+    def insert_workflow_log(self, workflow_id: str, level: str, message: str, stage: str | None = None, status: str | None = None, error_text: str | None = None) -> int:
+        """Append a log entry for a workflow with optional stage, status, and error information."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        query = "INSERT INTO workflow_logs (workflow_id, stage, status, level, message, error_text) VALUES (?, ?, ?, ?, ?, ?)"
+        try:
+            with self.transaction() as cur:
+                def _exec(q, p):
+                    return cur.execute(q, p)
+                self._execute_with_retry(_exec, query, (workflow_id, stage, status, level, message, error_text))
+                return int(cur.lastrowid)
+        except sqlite3.Error as e:
+            logger.exception("Failed to insert workflow log for %s: %s", workflow_id, e)
+            raise
+
+    def get_workflow_logs(
+        self,
+        workflow_id: str,
+        limit: int = 500,
+        offset: int = 0,
+        stage: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return workflow logs ordered by id ascending with optional filters and pagination.
+
+        Args:
+            workflow_id: workflow identifier
+            limit: max rows to return
+            offset: row offset
+            stage: optional stage name to filter
+            start_date: inclusive lower bound for created_at (ISO format)
+            end_date: inclusive upper bound for created_at (ISO format)
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        base_query = "SELECT workflow_id, stage, status, level, message, error_text, created_at FROM workflow_logs WHERE workflow_id = ?"
+        params: List[Any] = [workflow_id]
+        if stage:
+            base_query += " AND stage = ?"
+            params.append(stage)
+        if start_date:
+            base_query += " AND created_at >= ?"
+            params.append(start_date)
+        if end_date:
+            base_query += " AND created_at <= ?"
+            params.append(end_date)
+        base_query += " ORDER BY id ASC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        try:
+            cursor = self.connection.cursor()
+            # Use execute_with_retry for robust reads in highly contested DBs
+            def _exec(q, p):
+                return cursor.execute(q, p)
+            self._execute_with_retry(_exec, base_query, tuple(params))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        except sqlite3.Error as e:
+            logger.exception("Failed to read workflow logs for %s: %s", workflow_id, e)
+            raise
     
     def __enter__(self) -> "DatabaseService":
         """Context manager entry point."""
         self.connect()
         self.create_tables()
         return self
+
+    def get_workflows_by_status(self, statuses: List[str]) -> List[Dict[str, Any]]:
+        """Return workflows matching any of the provided statuses (safe for resume)."""
+        if not self.connection:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        placeholders = ",".join(["?" for _ in statuses])
+        query = f"SELECT * FROM workflows WHERE status IN ({placeholders}) ORDER BY created_at ASC"
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, tuple(statuses))
+            rows = cursor.fetchall()
+            results: List[Dict[str, Any]] = []
+            for row in rows:
+                d = dict(row)
+                if d.get("payload_json"):
+                    try:
+                        d["payload"] = json.loads(d.get("payload_json"))
+                    except Exception:
+                        d["payload"] = d.get("payload_json")
+                results.append(d)
+            return results
+        except sqlite3.Error as e:
+            logger.exception("Failed to query workflows by status %s: %s", statuses, e)
+            raise
     
     def __exit__(self, exc_type: Optional[type], exc_val: Optional[BaseException], exc_tb: Optional[object]) -> None:
         """Context manager exit point."""
         self.disconnect()
+
+    def insert_idea(self, idea: Idea) -> int:
+        """
+        Insert a generated idea.
+
+        Args:
+            idea: Idea to store
+
+        Returns:
+            Inserted row ID.
+        """
+
+        cursor = self.connection.cursor()
+
+        cursor.execute(
+            """
+            INSERT INTO ideas (
+                title,
+                hook,
+                emotion,
+                topic,
+                virality_score,
+                confidence_score,
+                source_pattern_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                idea.title,
+                idea.hook,
+                idea.emotion,
+                idea.topic,
+                idea.virality_score,
+                idea.confidence_score,
+                idea.source_pattern_id,
+            ),
+        )
+
+        self.connection.commit()
+
+        return cursor.lastrowid
+
+
+    def get_top_ideas(
+        self,
+        limit: int = 10,
+    ) -> list[Idea]:
+        """
+        Return the highest virality ideas.
+        """
+
+        cursor = self.connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                id,
+                title,
+                hook,
+                emotion,
+                topic,
+                virality_score,
+                confidence_score,
+                source_pattern_id,
+                created_at
+            FROM ideas
+            ORDER BY virality_score DESC,
+                     confidence_score DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+
+        rows = cursor.fetchall()
+
+        return [Idea.model_validate(dict(row)) for row in rows]
+
+    # ------------------------------------------------------------------
+    # Script operations
+    # ------------------------------------------------------------------
+
+    def insert_script(self, script) -> int:
+        """
+        Insert a generated script.
+
+        Returns:
+            Inserted script id.
+        """
+
+        cursor = self.connection.cursor()
+
+        cursor.execute(
+            """
+            INSERT INTO scripts (
+                idea_id,
+                title,
+                hook,
+                introduction,
+                body,
+                conclusion,
+                call_to_action,
+                estimated_duration
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                script.idea_id,
+                script.title,
+                script.hook,
+                script.introduction,
+                script.body,
+                script.conclusion,
+                script.call_to_action,
+                script.estimated_duration,
+            ),
+        )
+
+        self.connection.commit()
+
+        return cursor.lastrowid
+
+
+    def script_exists(self, idea_id: int) -> bool:
+        """
+        Check whether a script already exists for an idea.
+        """
+
+        cursor = self.connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM scripts
+            WHERE idea_id = ?
+            """,
+            (idea_id,),
+        )
+
+        return cursor.fetchone()[0] > 0
+
+
+    def get_pending_ideas(
+        self,
+        limit: int = 10,
+    ):
+        """
+        Return ideas that don't yet have scripts.
+        """
+
+        cursor = self.connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT i.*
+            FROM ideas i
+            LEFT JOIN scripts s
+                ON i.id = s.idea_id
+            WHERE s.id IS NULL
+            ORDER BY i.virality_score DESC,
+                    i.confidence_score DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+
+        rows = cursor.fetchall()
+
+        return [Idea.model_validate(dict(row)) for row in rows]
+
+
+    def get_script_count(self) -> int:
+        """
+        Total generated scripts.
+        """
+
+        cursor = self.connection.cursor()
+
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM scripts
+            """
+        )
+
+        return cursor.fetchone()[0]

@@ -4,7 +4,6 @@ Tests for Transcript Agent and related components.
 This module contains unit and integration tests for the Transcript model,
 TranscriptService, TranscriptAgent, and transcript database operations.
 """
-
 import logging
 import sqlite3
 import tempfile
@@ -247,7 +246,7 @@ class TestTranscriptService:
         dirty = "I&#39;m a test " + amp + "amp; more"
         clean = transcript_service._clean_transcript(dirty)
         assert "&#39;" not in clean
-        assert amp + "amp;" not in clean
+        assert "&" not in clean
 
     def test_clean_transcript_empty(self, transcript_service: TranscriptService):
         """Test cleaning empty text."""

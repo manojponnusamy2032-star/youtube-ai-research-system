@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 
 
 class TranscriptMethod(str, Enum):
@@ -45,9 +46,8 @@ class Transcript(BaseModel):
     status: TranscriptStatus = Field(default=TranscriptStatus.COMPLETED, description="Processing status")
     created_at: Optional[datetime] = Field(default=None, description="When the transcript was stored")
     
-    class Config:
-        """Pydantic model configuration."""
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "video_id": "dQw4w9WgXcQ",
                 "language": "en",
@@ -56,3 +56,4 @@ class Transcript(BaseModel):
                 "status": "completed"
             }
         }
+    )
