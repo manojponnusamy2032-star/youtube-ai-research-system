@@ -70,6 +70,7 @@ class TrendingResearchService:
         region_code: str = "US",
         per_keyword: int = 10,
         limit: int = 10,
+        include_trending: bool = True,
     ) -> list[IdeaCandidate]:
         """Collect trending and keyword videos, then rank them as ideas.
 
@@ -79,6 +80,8 @@ class TrendingResearchService:
             region_code: Region for the trending chart and searches.
             per_keyword: Results requested per keyword search.
             limit: Maximum number of ranked ideas returned.
+            include_trending: Include the global trending chart. Disable it to
+                keep results inside the niche described by ``keywords``.
 
         Returns:
             Ranked list of IdeaCandidate, highest score first.
@@ -88,10 +91,11 @@ class TrendingResearchService:
 
         items: dict[str, dict[str, Any]] = {}
 
-        for item in self._safe_trending(region_code):
-            video_id = item.get("id")
-            if isinstance(video_id, str):
-                items[video_id] = item
+        if include_trending:
+            for item in self._safe_trending(region_code):
+                video_id = item.get("id")
+                if isinstance(video_id, str):
+                    items[video_id] = item
 
         for keyword in keywords or []:
             for item in self._safe_search(keyword, per_keyword):

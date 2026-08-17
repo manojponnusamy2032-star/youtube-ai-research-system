@@ -39,6 +39,7 @@ def run_research(args: argparse.Namespace) -> int:
             keywords=args.keyword,
             region_code=args.region,
             limit=args.limit,
+            include_trending=args.include_trending or not args.keyword,
         )
     finally:
         youtube_service.close()
@@ -77,6 +78,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="Seed keyword to search (repeatable)",
+    )
+    research.add_argument(
+        "--include-trending",
+        action="store_true",
+        help="Also rank the global trending chart when keywords are given",
     )
     research.add_argument("--region", default="US", help="Region code (default: US)")
     research.add_argument("--limit", type=int, default=10, help="Number of ideas")

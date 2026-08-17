@@ -103,6 +103,19 @@ def test_research_respects_limit_and_searches_keywords() -> None:
     assert fake.search_calls == ["ai agents", "automation"]
 
 
+def test_research_can_exclude_the_trending_chart() -> None:
+    """Niche runs keep only keyword search results."""
+    fake = _FakeYouTubeService([_video("chart", views=1_000_000, likes=100_000)])
+    fake.search_and_get_details = MagicMock(
+        return_value=[_video("niche", views=50_000, likes=1_000)]
+    )
+    service = TrendingResearchService(fake)
+
+    ideas = service.research(keywords=["ai agents"], limit=5, include_trending=False)
+
+    assert [idea.source_video_id for idea in ideas] == ["niche"]
+
+
 def test_research_tolerates_api_errors() -> None:
     """A failing API call does not abort the research run."""
     fake = _FakeYouTubeService([_video("keep", views=100_000)])
