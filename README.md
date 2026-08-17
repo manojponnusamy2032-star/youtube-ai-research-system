@@ -35,6 +35,8 @@ tests/                # Unit and integration tests
 - Python 3.13 or newer
 - Node.js and npm (for frontend)
 - SQLite (bundled with Python — no separate server required)
+- FFmpeg on `PATH` (required by the auto-publish pipeline)
+- A Piper voice model (see [Auto-Publish Pipeline](#auto-publish-pipeline))
 
 ## Installation
 
@@ -97,6 +99,52 @@ npm run build
 ```
 
 The frontend uses `NEXT_PUBLIC_API_BASE` to locate the backend API — update it in `.env` if needed.
+
+## Auto-Publish Pipeline
+
+Research trending ideas, render a narrated video locally, and publish it to
+YouTube. Everything except the YouTube Data API (free quota) runs on this
+machine, so a run has no per-video cost.
+
+### One-time setup
+
+```bash
+# FFmpeg
+sudo apt-get install -y ffmpeg
+
+# Piper voice model (~63 MB, MIT-licensed)
+mkdir -p ~/piper_voices && cd ~/piper_voices
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+```
+
+Set `PIPER_VOICE_MODEL` to the downloaded `.onnx` path.
+
+### Upload credentials
+
+Uploading needs an OAuth client (Google Cloud → YouTube Data API v3 → OAuth
+desktop client) and a refresh token for the `youtube.upload` scope. Put the
+values in `.env` as `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` and
+`YOUTUBE_REFRESH_TOKEN`. Rendering works without them.
+
+### Usage
+
+```bash
+# Rank trending ideas (uses YOUTUBE_API_KEY)
+python run_auto_publish.py research --keyword "ai automation" --limit 10
+
+# Render a plan locally (no upload)
+python run_auto_publish.py publish --plan examples/plan_shorts_example.json
+
+# Render as long-form and publish publicly
+python run_auto_publish.py publish \
+  --plan examples/plan_shorts_example.json \
+  --format long --visibility public --upload
+```
+
+A plan is JSON: a title, description, tags, format (`shorts` = 1080x1920,
+`long` = 1920x1080) and a list of scenes with narration and optional captions
+or background images. See `examples/plan_shorts_example.json`.
 
 ## Run Tests
 
