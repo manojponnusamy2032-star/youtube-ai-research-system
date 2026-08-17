@@ -89,6 +89,16 @@ class VideoAssembler:
         # Execute the assembly.
         return self._execute_assembly(command, output_path, len(sorted_outputs), concat_content)
 
+    @staticmethod
+    def _ensure_output_directory(output_path: str) -> None:
+        """Create the parent directory of the output path when needed.
+
+        Args:
+            output_path: Full output file path.
+        """
+        directory = os.path.dirname(os.path.abspath(output_path))
+        os.makedirs(directory, exist_ok=True)
+
     def _validate_inputs(self, render_outputs: list[dict[str, Any]]) -> None:
         """Validate render output records for assembly.
 
@@ -214,6 +224,8 @@ class VideoAssembler:
         ) as f:
             f.write(concat_content)
             concat_file = f.name
+
+        self._ensure_output_directory(output_path)
 
         # Replace the stdin input with the concat file path.
         exec_command = list(command)

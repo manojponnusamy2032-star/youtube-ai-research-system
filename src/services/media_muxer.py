@@ -161,6 +161,8 @@ class MediaMuxer:
                 "command": command,
             }
 
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
         try:
             start_time = time.time()
             result = subprocess.run(

@@ -150,6 +150,47 @@ class YouTubeService:
         logger.info(f"Found {len(items)} videos for keyword '{keyword}'")
         return items
     
+    def get_trending_videos(
+        self,
+        region_code: str = "US",
+        category_id: Optional[str] = None,
+        max_results: int = 25,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get the most popular videos for a region.
+
+        Args:
+            region_code: ISO 3166-1 alpha-2 region code (default: US)
+            category_id: Optional YouTube video category ID filter
+            max_results: Maximum number of results (1-50, default: 25)
+
+        Returns:
+            List of video items with snippet, statistics and contentDetails
+
+        Raises:
+            ValueError: If parameters are invalid
+            YouTubeAPIError: If API request fails
+        """
+        if not region_code or not region_code.strip():
+            raise ValueError("region_code cannot be empty")
+
+        if not 1 <= max_results <= 50:
+            raise ValueError("max_results must be between 1 and 50")
+
+        params: Dict[str, Any] = {
+            "part": "snippet,statistics,contentDetails",
+            "chart": "mostPopular",
+            "regionCode": region_code.strip(),
+            "maxResults": max_results,
+        }
+        if category_id:
+            params["videoCategoryId"] = category_id
+
+        logger.info(f"Fetching {max_results} trending videos for region '{region_code}'")
+
+        data = self._make_request("videos", params)
+        return data.get("items", [])
+
     def get_video_details(self, video_ids: List[str]) -> List[Dict[str, Any]]:
         """
         Get detailed metadata for videos.

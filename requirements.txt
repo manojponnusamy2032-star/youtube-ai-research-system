@@ -11,6 +11,12 @@ rich>=13.0.0
 # Database
 # SQLite is part of Python standard library - no external package needed
 
+# Auto-publish pipeline (zero cost: local Piper TTS + local FFmpeg render)
+piper-tts>=1.2.0
+google-auth>=2.30.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.130.0
+
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
