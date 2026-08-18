@@ -240,6 +240,14 @@ class RenderJobSpec:
     audio_requirements: str
     audio_request: AudioRequest | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable representation."""
+        result = asdict(self)
+        # Handle audio_request specially since it's an AudioRequest dataclass
+        if self.audio_request is not None:
+            result["audio_request"] = self.audio_request.to_dict()
+        return result
+
 
 @dataclass
 class RenderConfig:

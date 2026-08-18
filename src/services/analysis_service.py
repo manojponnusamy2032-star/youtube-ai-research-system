@@ -259,7 +259,12 @@ class AnalysisService:
                 difficulty = data['difficulty_level'].lower().replace(' ', '_')
                 if difficulty not in ['beginner', 'intermediate', 'advanced', 'all_levels']:
                     difficulty = 'all_levels'
-                data['difficulty_level'] = difficulty
+                data['difficulty_level'] = DifficultyLevel(difficulty)
+            
+            # Debug: print the difficulty level type and value
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Normalized difficulty_level: {data['difficulty_level']} (type: {type(data['difficulty_level'])})")
             
             # Ensure confidence_score is a float
             if 'confidence_score' in data:

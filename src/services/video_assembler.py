@@ -173,6 +173,7 @@ class VideoAssembler:
             "-safe", "0",
             "-i", "-",
             "-c:v", self.config.video_codec,
+            "-c:a", self.config.audio_format,
             "-movflags", "+faststart",
             output_path,
         ]
