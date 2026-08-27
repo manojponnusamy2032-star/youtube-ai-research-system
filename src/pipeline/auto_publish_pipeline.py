@@ -34,6 +34,8 @@ from src.services.scene_video_renderer import (
     SceneVideoRenderer,
     VideoFormat,
 )
+from src.services.semantic_motion import SemanticMotionLowerer, SemanticMotionSpec
+from src.services.semantic_transition import SemanticTransitionResolver
 from src.services.stickman_renderer import StickmanRenderer
 from src.services.tts_service import TTSRequest, TTSService
 from src.services.video_assembler import VideoAssembler
@@ -46,6 +48,7 @@ from src.services.youtube_upload_service import (
 logger = logging.getLogger(__name__)
 
 SCENE_PADDING_SECONDS = 0.4
+SEMANTIC_VISUALS_ENABLED = False
 
 
 @dataclass
@@ -392,8 +395,9 @@ class AutoPublishPipeline:
 
         # Initialize stickman renderer for visual scenes
         stickman_renderer = StickmanRenderer(execute_enabled=True)
+        semantic_contexts = self._semantic_contexts(plan) if SEMANTIC_VISUALS_ENABLED else []
 
-        for scene, segment in zip(plan.scenes, segments):
+        for index, (scene, segment) in enumerate(zip(plan.scenes, segments)):
             scene_number = segment["scene_number"]
             duration = segment["duration_seconds"] + SCENE_PADDING_SECONDS
             video_format = plan.format
@@ -412,6 +416,7 @@ class AutoPublishPipeline:
                     duration=duration,
                     video_format=video_format,
                     stickman_renderer=stickman_renderer,
+                    semantic_context=semantic_contexts[index] if semantic_contexts else None,
                 )
             else:
                 # Use SceneVideoRenderer for backward-compatible caption-only scenes
@@ -434,6 +439,66 @@ class AutoPublishPipeline:
             render_outputs.append(record)
         return {"status": "completed", "render_outputs": render_outputs}
 
+    @staticmethod
+    def _semantic_contexts(plan: VideoPlan) -> list[dict[str, Any]]:
+        """Build optional derived semantics without changing scene models."""
+        from src.services.visual_beat_engine import VisualBeatEngine
+        from src.services.visual_focus import VisualFocusResolver
+
+        beats = VisualBeatEngine().detect_sequence(
+            [
+                {
+                    "narration": scene.narration,
+                    "scene_role": scene.visual.scene_role if scene.visual else "",
+                }
+                for scene in plan.scenes
+            ]
+        )
+        focus_resolver = VisualFocusResolver()
+        motion_lowerer = SemanticMotionLowerer()
+        transition_resolver = SemanticTransitionResolver()
+        contexts: list[dict[str, Any]] = []
+        for index, (scene, beat) in enumerate(zip(plan.scenes, beats)):
+            visual = scene.visual or VisualScene()
+            focus = focus_resolver.resolve(
+                beat,
+                characters=visual.characters,
+                objects=visual.objects,
+                text_elements=visual.text_elements,
+                primary_focus=visual.primary_focus,
+                focus_target=visual.camera_spec.get("focus_target"),
+            )
+            subject = focus.emphasis_target or focus.primary or beat.subject
+            intent = {
+                "HOOK": "reveal",
+                "PROBLEM": "reveal_decline",
+                "CONTRAST": "compare",
+                "SOLUTION": "emphasize_growth",
+                "CTA": "emphasize",
+                "EXPLANATION": "emphasize",
+                "EXAMPLE": "reveal",
+            }.get(beat.type, "")
+            parameters: dict[str, Any] = {}
+            if intent == "compare":
+                parameters["subjects"] = [item for item in (focus.primary, focus.secondary) if item]
+            motion_result = motion_lowerer.lower(
+                SemanticMotionSpec(subject=subject, intent=intent, duration=1.0, parameters=parameters),
+                characters=visual.characters,
+                objects=visual.objects,
+                text_elements=visual.text_elements,
+                visual_focus=focus,
+            ) if intent else None
+            next_transition = None
+            if index + 1 < len(beats) and visual.transition is None:
+                next_transition = transition_resolver.resolve(beat, beats[index + 1])
+            contexts.append({
+                "beat": beat,
+                "focus": focus,
+                "motion_result": motion_result,
+                "transition": next_transition,
+            })
+        return contexts
+
     def _render_visual_scene(
         self,
         scene: ScenePlan,
@@ -442,6 +507,7 @@ class AutoPublishPipeline:
         duration: float,
         video_format: VideoFormat,
         stickman_renderer: StickmanRenderer,
+        semantic_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Render a scene with visual intent using StickmanRenderer."""
         from src.models.content_package import AudioRequest, RenderConfig, RenderJobSpec
@@ -472,6 +538,8 @@ class AutoPublishPipeline:
         # Structured scene fields are the canonical path. Only use legacy text-based
         # motion fallbacks when no structured composition is present.
         motions = visual.motions.copy()
+        if semantic_context and semantic_context.get("motion_result"):
+            motions.extend(semantic_context["motion_result"].motions)
         structured_visual = (
             bool(getattr(visual, "characters", None))
             or bool(getattr(visual, "objects", None))
@@ -528,6 +596,8 @@ class AutoPublishPipeline:
 
         # Build transition
         transition_to_next = visual.transition
+        if transition_to_next is None and semantic_context:
+            transition_to_next = semantic_context.get("transition")
         if transition_to_next is None and visual.camera_pattern in {"pan", "tracking", "follow"}:
             transition_to_next = Transition(type="crossfade", duration=0.5)
 
@@ -539,6 +609,18 @@ class AutoPublishPipeline:
                 duration,
                 transition_to_next,
             )
+            if semantic_context:
+                motion_result = semantic_context.get("motion_result")
+                visual_description["semantics"] = {
+                    "beat": semantic_context["beat"].to_dict(),
+                    "focus": semantic_context["focus"].to_dict(),
+                    "motions": [motion.to_dict() for motion in motion_result.motions] if motion_result else [],
+                    "transition": transition_to_next.to_dict() if transition_to_next else None,
+                }
+                from src.services.visual_qa import VisualQAService
+
+                qa_report = VisualQAService().check_composition(visual_description, scene=f"scene_{scene_number:03d}")
+                visual_description["qa_report"] = qa_report.to_dict()
 
         # Create RenderJobSpec
         job_spec = RenderJobSpec(
