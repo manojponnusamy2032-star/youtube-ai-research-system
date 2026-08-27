@@ -57,6 +57,7 @@ output/
 .coverage
 htmlcov/
 .tox/
+.pytest_tmp*/
 
 # Type checking
 .mypy_cache/
