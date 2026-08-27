@@ -3,6 +3,10 @@ Analysis Agent for YouTube AI Research System.
 
 This module implements the Analysis Agent responsible for analyzing
 video transcripts and storing structured insights using LLM.
+
+The agent integrates with the Knowledge Brain retriever to provide prior
+knowledge context to the LLM, creating a closed learning loop:
+    Transcript -> Knowledge Retrieval -> LLM Analysis -> Knowledge Extraction
 """
 
 import logging
@@ -18,6 +22,7 @@ from src.core.base_agent import BaseAgent
 from src.models.transcript import Transcript
 from src.services.analysis_service import AnalysisService, LLMProvider
 from src.database.database_service import DatabaseService
+from src.knowledge.retriever import KnowledgeRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -29,16 +34,23 @@ class AnalysisAgent(BaseAgent):
     Fetches transcripts without analysis from the database, analyzes them
     using the AnalysisService and LLM, and stores results with model tracking.
 
+    When a knowledge_retriever is provided, the agent retrieves prior knowledge
+    from the Knowledge Brain before each analysis and injects it as context
+    into the LLM prompt. This enables the analysis to be informed by previous
+    research findings without treating the model as having permanent memory.
+
     Attributes:
         analysis_service: AnalysisService instance
         database_service: DatabaseService instance
+        knowledge_retriever: Optional KnowledgeRetriever for prior knowledge context
         console: Rich console for formatted output
     """
 
     def __init__(
         self,
         analysis_service: AnalysisService,
-        database_service: DatabaseService
+        database_service: DatabaseService,
+        knowledge_retriever: KnowledgeRetriever | None = None
     ) -> None:
         super().__init__("AnalysisAgent")
         """
@@ -47,11 +59,16 @@ class AnalysisAgent(BaseAgent):
         Args:
             analysis_service: AnalysisService instance
             database_service: DatabaseService instance
+            knowledge_retriever: Optional KnowledgeRetriever to provide prior
+                knowledge context to the LLM during analysis
         """
         self.analysis_service = analysis_service
         self.database_service = database_service
+        self.knowledge_retriever = knowledge_retriever
         self.console = Console()
         logger.info("Analysis Agent initialized")
+        if self.knowledge_retriever:
+            logger.info("Analysis Agent integrated with Knowledge Brain retriever")
     
     def _print_banner(self) -> None:
         """Print the YAIRS Analysis Agent banner."""
@@ -110,9 +127,10 @@ class AnalysisAgent(BaseAgent):
         
         Workflow:
         1. Fetch transcripts without analysis from database
-        2. Analyze each transcript using LLM
-        3. Save analysis results to database
-        4. Print summary
+        2. Retrieve prior knowledge from Knowledge Brain (if retriever available)
+        3. Analyze each transcript using LLM with knowledge context
+        4. Save analysis results to database
+        5. Print summary
         
         Args:
             limit: Maximum number of transcripts to process (default: 50)
@@ -157,8 +175,29 @@ class AnalysisAgent(BaseAgent):
                 self.console.print(f"  [red]Failed[/red] (no transcript found)")
                 continue
             
-            # Process transcript
-            success, error = self.analysis_service.process_transcript(transcript)
+            # Retrieve prior knowledge context from Knowledge Brain
+            knowledge_context = None
+            if self.knowledge_retriever is not None:
+                try:
+                    context = self.knowledge_retriever.build_context(
+                        transcript.transcript[:2000],  # Use transcript preview as query
+                        max_notes=5,
+                        max_chars=2000,
+                    )
+                    if context.relevant_knowledge:
+                        knowledge_context = context.to_markdown()
+                        self.console.print(f"  [cyan]Retrieved {len(context.relevant_knowledge)} prior knowledge notes[/cyan]")
+                except Exception as e:
+                    logger.warning(f"Knowledge retrieval failed for {video_id}: {e}")
+
+            # Process transcript with knowledge context if available,
+            # falling back to the standard process_transcript for mocks/tests
+            try:
+                success, error = self.analysis_service.process_transcript_with_context(
+                    transcript, knowledge_context=knowledge_context
+                )
+            except (AttributeError, TypeError):
+                success, error = self.analysis_service.process_transcript(transcript)
             
             if not success:
                 failed_count += 1

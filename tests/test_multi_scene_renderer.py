@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from PIL import Image, ImageChops, ImageStat
 
 from src.models.content_package import AudioRequest, RenderConfig, RenderJobPlan, RenderJobSpec
 from src.services.multi_scene_renderer import MultiSceneRenderer
@@ -52,6 +53,7 @@ def _make_job(
     scene_number: int,
     duration: int,
     audio_request: dict[str, Any] | None = None,
+    motions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Create a job dict."""
     job = {
@@ -66,6 +68,8 @@ def _make_job(
     }
     if audio_request:
         job["audio_request"] = audio_request
+    if motions:
+        job["motions"] = motions
     return job
 
 
@@ -98,6 +102,40 @@ def _probe_duration(path: Path) -> float:
         check=True,
     ).stdout.strip()
     return float(result) if result else 0.0
+
+
+def _render_frame(video_path: Path, timestamp: str, output_path: Path) -> None:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            timestamp,
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            "-update",
+            "1",
+            str(output_path),
+        ],
+        shell=False,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _frame_difference(left: Path, right: Path) -> int:
+    image_a = Image.open(left).convert("RGB")
+    image_b = Image.open(right).convert("RGB")
+    diff = ImageChops.difference(image_a, image_b)
+    bbox = diff.getbbox()
+    if bbox is None:
+        return 0
+    crop = diff.crop(bbox)
+    stat = ImageStat.Stat(crop)
+    return int(sum(stat.sum))
 
 
 @pytest.mark.integration
@@ -317,3 +355,98 @@ def test_final_mp4_contains_audio_stream_when_requested() -> None:
         video, audio = _probe_streams(final_output)
         assert video == "video"
         assert audio == "audio"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _ffmpeg_available(), reason="FFmpeg is not available")
+def test_three_scene_motion_plan_preserves_visible_motion_in_final_mp4() -> None:
+    """Render three scenes with distinct motions and verify the final MP4 changes over time."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = _make_config(tmpdir)
+        renderer = MultiSceneRenderer(config=config)
+
+        plan = _make_plan([
+            _make_job(
+                "scene-1",
+                1,
+                2,
+                motions=[
+                    {
+                        "type": "zoom",
+                        "target": "camera",
+                        "start_time": 0.0,
+                        "duration": 2.0,
+                        "easing": "ease_in_out",
+                        "parameters": {"from": 1.0, "to": 1.2},
+                    }
+                ],
+            ),
+            _make_job(
+                "scene-2",
+                2,
+                2,
+                motions=[
+                    {
+                        "type": "enter",
+                        "target": "character",
+                        "start_time": 0.0,
+                        "duration": 1.0,
+                        "easing": "ease_out",
+                        "parameters": {"direction": "left"},
+                    },
+                    {
+                        "type": "move",
+                        "target": "character",
+                        "start_time": 0.5,
+                        "duration": 1.5,
+                        "easing": "ease_in_out",
+                        "parameters": {"from": {"x": 0.15, "y": 0.75}, "to": {"x": 0.5, "y": 0.75}},
+                    },
+                ],
+            ),
+            _make_job(
+                "scene-3",
+                3,
+                2,
+                motions=[
+                    {
+                        "type": "fade",
+                        "target": "text",
+                        "start_time": 0.5,
+                        "duration": 1.5,
+                        "easing": "ease_in_out",
+                        "parameters": {"from": 0.0, "to": 1.0},
+                    },
+                    {
+                        "type": "scale",
+                        "target": "text",
+                        "start_time": 0.5,
+                        "duration": 1.5,
+                        "easing": "ease_out",
+                        "parameters": {"from": 0.85, "to": 1.0},
+                    },
+                ],
+            ),
+        ])
+
+        result = renderer.render_plan(plan)
+
+        assert result["status"] == "completed", f"Failed: {result.get('error')}"
+        assert result["total_scenes"] == 3
+        assert result["total_duration_seconds"] == 6
+
+        final_output = Path(result["final_output"])
+        assert final_output.exists()
+        duration = _probe_duration(final_output)
+        assert abs(duration - 6.0) < 0.75
+
+        first_frame = Path(tmpdir) / "scene_first.png"
+        middle_frame = Path(tmpdir) / "scene_middle.png"
+        last_frame = Path(tmpdir) / "scene_last.png"
+        _render_frame(final_output, "0.5", first_frame)
+        _render_frame(final_output, "2.5", middle_frame)
+        _render_frame(final_output, "4.5", last_frame)
+
+        assert _frame_difference(first_frame, middle_frame) > 0
+        assert _frame_difference(middle_frame, last_frame) > 0
+        assert _frame_difference(first_frame, last_frame) > 0

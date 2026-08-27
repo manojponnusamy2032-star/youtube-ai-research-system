@@ -1,0 +1,11 @@
+Loaded plan: 10 scenes, format=shorts
+
+=== PIPELINE RESULT ===
+  status: completed
+  stage: render
+  video_path: d:\youtube-ai-research-system\youtube-ai-research-system\output\visual_quality_v1\final_with_audio.mp4
+  duration_seconds: 57.77
+  scene_count: 10
+  final size: 11.12 MB
+
+DONE

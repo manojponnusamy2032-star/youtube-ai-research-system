@@ -6,6 +6,154 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
+SUPPORTED_MOTION_TYPES = {
+    "move",
+    "scale",
+    "rotate",
+    "fade",
+    "zoom",
+    "pan",
+    "enter",
+    "exit",
+    "emphasize",
+}
+
+SUPPORTED_TRANSITION_TYPES = {
+    "cut",
+    "crossfade",
+    "fade",
+    "fade_to_black",
+    "slide_left",
+    "slide_right",
+    "slide_up",
+    "slide_down",
+}
+
+SUPPORTED_MOTION_TARGETS = {
+    "scene",
+    "camera",
+    "character",
+    "object",
+    "text",
+    "layer",
+}
+
+SUPPORTED_EASINGS = {
+    "linear",
+    "ease_in",
+    "ease_out",
+    "ease_in_out",
+}
+
+
+@dataclass
+class Motion:
+    """Structured motion primitive for scene-to-renderer handoff."""
+
+    type: str
+    target: str
+    start_time: float
+    duration: float
+    easing: str = "linear"
+    parameters: dict[str, Any] = field(default_factory=dict)
+    target_id: str = ""
+    label: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate core motion fields."""
+        self.type = str(self.type).strip().lower()
+        self.target = str(self.target).strip().lower()
+        self.easing = str(self.easing).strip().lower()
+
+        if self.type not in SUPPORTED_MOTION_TYPES:
+            raise ValueError(f"unknown motion type: {self.type}")
+        if self.target not in SUPPORTED_MOTION_TARGETS:
+            raise ValueError(f"invalid motion target: {self.target}")
+        if self.easing not in SUPPORTED_EASINGS:
+            raise ValueError(f"invalid easing: {self.easing}")
+        if self.start_time < 0:
+            raise ValueError("start_time cannot be negative")
+        if self.duration <= 0:
+            raise ValueError("duration must be positive")
+        if not isinstance(self.parameters, dict):
+            raise ValueError("parameters must be a dictionary")
+        self._validate_required_parameters()
+
+    def validate(self, scene_duration: float | None = None, allow_overflow: bool = False) -> None:
+        """Validate timing against a scene duration."""
+        if scene_duration is not None and not allow_overflow:
+            end_time = self.start_time + self.duration
+            if end_time > scene_duration + 1e-6:
+                raise ValueError("motion duration extends beyond scene duration")
+
+    def _validate_required_parameters(self) -> None:
+        """Validate motion-type specific required parameters."""
+        params = self.parameters or {}
+        if self.type in {"move", "scale", "rotate", "fade", "zoom", "pan"}:
+            if "from" not in params or "to" not in params:
+                raise ValueError(f"{self.type} motion requires 'from' and 'to' parameters")
+        elif self.type in {"enter", "exit"}:
+            if "direction" not in params and ("from" not in params or "to" not in params):
+                raise ValueError(f"{self.type} motion requires a direction or explicit from/to parameters")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable representation."""
+        return asdict(self)
+
+
+@dataclass
+class Transition:
+    """Structured transition primitive between adjacent scenes."""
+
+    type: str
+    duration: float = 0.0
+    parameters: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.type = str(self.type).strip().lower()
+        if self.type not in SUPPORTED_TRANSITION_TYPES:
+            raise ValueError(f"unknown transition type: {self.type}")
+        if not isinstance(self.parameters, dict):
+            raise ValueError("parameters must be a dictionary")
+        if self.type == "cut":
+            self.duration = 0.0
+        elif self.duration <= 0:
+            raise ValueError("transition duration must be positive")
+
+    def validate(self, max_duration: float | None = None) -> None:
+        if self.type != "cut" and max_duration is not None and self.duration > max_duration + 1e-6:
+            raise ValueError("transition duration exceeds available scene duration")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class MotionIntent:
+    """Lightweight scene-level motion guidance used during generation."""
+
+    scene_role: str
+    primary_focus: str
+    camera_pattern: str
+    energy: str = "medium"
+    preferred_targets: list[str] = field(default_factory=list)
+    motion_style: str = ""
+    notes: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.scene_role = str(self.scene_role).strip().lower() or "general"
+        self.primary_focus = str(self.primary_focus).strip().lower() or "scene"
+        self.camera_pattern = str(self.camera_pattern).strip().lower() or "hold"
+        self.energy = str(self.energy).strip().lower() or "medium"
+        if self.energy not in {"low", "medium", "high"}:
+            raise ValueError(f"invalid motion intent energy: {self.energy}")
+        self.preferred_targets = [str(item).strip().lower() for item in self.preferred_targets if str(item).strip()]
+        self.notes = [str(item).strip() for item in self.notes if str(item).strip()]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 @dataclass
 class ThumbnailPlan:
     """Represents thumbnail strategy and image-generation guidance."""
@@ -62,6 +210,9 @@ class VideoProductionScene:
     camera_direction: str
     animation_direction: str
     transition: str
+    motions: list[Motion] = field(default_factory=list)
+    motion_intent: MotionIntent | None = None
+    transition_to_next: Transition | None = None
 
 
 @dataclass
@@ -238,7 +389,11 @@ class RenderJobSpec:
     animation_instructions: str
     camera_instructions: str
     audio_requirements: str
+    motions: list[Motion] = field(default_factory=list)
+    transition_to_next: Transition | None = None
     audio_request: AudioRequest | None = None
+    # Structured visual composition (characters, objects, environment, effects).
+    visual_description: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""

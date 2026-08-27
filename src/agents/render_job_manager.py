@@ -135,6 +135,8 @@ class RenderJobManager(BaseAgent):
                 "animation_instructions": str(job_data.get("animation_instructions", "")),
                 "camera_instructions": str(job_data.get("camera_instructions", "")),
                 "audio_requirements": str(job_data.get("audio_requirements", "")),
+                "motions": job_data.get("motions", []),
+                "transition_to_next": job_data.get("transition_to_next"),
             }
             # Preserve audio_request if present (AudioRequest object or dict)
             if "audio_request" in job_data and job_data["audio_request"] is not None:

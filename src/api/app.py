@@ -14,6 +14,7 @@ from src.api.errors import add_exception_handlers
 from src.api.routes.generation import router as generation_router
 from src.api.routes.health import router as health_router
 from src.api.routes.intelligence import router as intelligence_router
+from src.api.routes.knowledge import router as knowledge_router
 from src.api.routes.research import router as research_router
 
 logger = logging.getLogger("yairs.api")
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(research_router)
     app.include_router(generation_router)
     app.include_router(intelligence_router)
+    app.include_router(knowledge_router)
     return app
 
 

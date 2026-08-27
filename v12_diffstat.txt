@@ -1,0 +1,112 @@
+﻿ .env.example                               |    3 +
+ pytest.ini                                 |    1 +
+ src/agents/analysis_agent.py               |   51 +-
+ src/agents/knowledge_base_agent.py         |   55 +-
+ src/agents/render_job_executor.py          |   37 +
+ src/agents/render_job_manager.py           |    2 +
+ src/agents/render_output_manager.py        |   19 +
+ src/api/app.py                             |    2 +
+ src/api/dependencies.py                    |   60 +-
+ src/models/content_package.py              |  155 +++
+ src/pipeline/auto_publish_pipeline.py      |  437 +++++++-
+ src/prompts/analysis_prompt.py             |   25 +-
+ src/services/analysis_service.py           |   35 +-
+ src/services/content_generation_service.py |  627 ++++++++++-
+ src/services/final_media_orchestrator.py   |    9 +-
+ src/services/multi_scene_renderer.py       |   45 +-
+ src/services/scene_video_renderer.py       |   10 +-
+ src/services/stickman_renderer.py          | 1579 +++++++++++++++++++++++++++-
+ src/services/video_assembler.py            |  308 +++++-
+ src/utils/config.py                        |    6 +
+ tests/integration/test_video_assembly.py   |  283 ++++-
+ tests/test_content_generation_service.py   |   66 ++
+ tests/test_multi_scene_renderer.py         |  135 ++-
+ tests/test_render_job_executor.py          |   67 ++
+ tests/test_stickman_renderer.py            |   33 +
+ tests/test_video_assembler.py              |  144 +++
+ 26 files changed, 4053 insertions(+), 141 deletions(-)
+ M .env.example
+ M pytest.ini
+ M src/agents/analysis_agent.py
+ M src/agents/knowledge_base_agent.py
+ M src/agents/render_job_executor.py
+ M src/agents/render_job_manager.py
+ M src/agents/render_output_manager.py
+ M src/api/app.py
+ M src/api/dependencies.py
+ M src/models/content_package.py
+ M src/pipeline/auto_publish_pipeline.py
+ M src/prompts/analysis_prompt.py
+ M src/services/analysis_service.py
+ M src/services/content_generation_service.py
+ M src/services/final_media_orchestrator.py
+ M src/services/multi_scene_renderer.py
+ M src/services/scene_video_renderer.py
+ M src/services/stickman_renderer.py
+ M src/services/video_assembler.py
+ M src/utils/config.py
+ M tests/integration/test_video_assembly.py
+ M tests/test_content_generation_service.py
+ M tests/test_multi_scene_renderer.py
+ M tests/test_render_job_executor.py
+ M tests/test_stickman_renderer.py
+ M tests/test_video_assembler.py
+?? .pytest_tmp2/
+?? .pytest_tmp_full/
+?? .pytest_tmp_full2/
+?? .pytest_tmp_t/
+?? analyze_bulb.py
+?? analyze_frames.py
+?? analyze_frames2.py
+?? analyze_text.py
+?? complete_pipeline.py
+?? debug_plan.py
+?? docs/
+?? examples/plan_visual_example.json
+?? examples/plan_visual_example_fixed.json
+?? examples/plan_visual_quality_v1.json
+?? extract_frames.py
+?? fix_cam2.py
+?? fix_camera.py
+?? fix_pipeline.py
+?? generate_audit_videos.py
+?? render_v12_err.txt
+?? render_v12_log.txt
+?? render_visual_quality_v1.py
+?? run_audit.py
+?? run_knowledge_eval.py
+?? src/api/routes/knowledge.py
+?? src/knowledge/
+?? src/services/scene_composition.py
+?? src/services/system_speech_tts_service.py
+?? src/utils/motion_utils.py
+?? test_output.txt
+?? tests/test_audio_pipeline_integration.py
+?? tests/test_knowledge_brain.py
+?? tests/test_knowledge_evaluation.py
+?? tests/test_knowledge_retriever.py
+?? tests/test_motion_primitives.py
+?? tests/test_transition_model.py
+?? tests/test_visual_quality_v1.py
+?? tests/test_visual_quality_v12_regression.py
+?? v12_change_inventory.txt
+?? v12_changes.txt
+?? v12_contact_sheet.jpg
+?? v12_diffstat.txt
+?? v12_final_specs.txt
+?? v12_final_test_results.txt
+?? v12_mp4_spec.txt
+?? v12_mp4_specs.txt
+?? v12_specs.txt
+?? v12_test_result.txt
+?? v12_test_results.txt
+?? v12_validation/
+?? v12_validation_changes.txt
+?? v12_validation_results.txt
+?? v12_validation_specs.txt
+?? v12_validation_tests.txt
+?? validate_visual_quality_v1.py
+?? write_plan.py
+?? write_plan2.py
+?? write_plan3.py
+

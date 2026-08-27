@@ -8,6 +8,8 @@ from src.core.agent_result import AgentResult
 from src.core.base_agent import BaseAgent
 from src.core.context import WorkflowContext
 from src.database.database_service import DatabaseService
+from src.knowledge.knowledge_service import KnowledgeService as ObsidianKnowledgeService
+from src.knowledge.models import NoteType
 from src.models.knowledge import KnowledgeEntry
 from src.services.knowledge_service import KnowledgeService
 
@@ -28,10 +30,12 @@ class KnowledgeBaseAgent(BaseAgent):
         self,
         database_service: DatabaseService,
         knowledge_service: KnowledgeService,
+        obsidian_knowledge_service: ObsidianKnowledgeService | None = None,
     ) -> None:
         super().__init__("KnowledgeBaseAgent")
         self.database_service = database_service
         self.knowledge_service = knowledge_service
+        self.obsidian_knowledge_service = obsidian_knowledge_service
 
     def run(self, context: WorkflowContext) -> AgentResult:
         """Read pattern report from context, build entries, and persist them."""
@@ -43,8 +47,16 @@ class KnowledgeBaseAgent(BaseAgent):
         saved_count = self.knowledge_service.save_many(entries)
         context.set("knowledge_entries", [entry.to_dict() for entry in entries])
         context.set("knowledge_entries_saved", saved_count)
+        # Write structured knowledge to Obsidian vault if available
+        obsidian_notes = 0
+        if self.obsidian_knowledge_service is not None:
+            obsidian_notes = self._write_obsidian_notes(report)
+            context.set("obsidian_notes_written", obsidian_notes)
         self.finish()
-        return AgentResult.ok(saved_entries=saved_count)
+        return AgentResult.ok(
+            saved_entries=saved_count,
+            obsidian_notes_written=obsidian_notes,
+        )
 
     def _build_entries(self, report: dict[str, Any]) -> list[KnowledgeEntry]:
         """Build knowledge entries from supported report categories."""
@@ -89,3 +101,44 @@ class KnowledgeBaseAgent(BaseAgent):
     def _recommendation(self, category: str, pattern: str) -> str:
         """Generate concise recommendation text for knowledge entry."""
         return f"Prefer {pattern.lower()} strategies for strong {category.lower()} outcomes."
+
+    def _write_obsidian_notes(self, report: dict[str, Any]) -> int:
+        """Write structured knowledge notes to the Obsidian vault.
+
+        Only persists useful, structured knowledge - not raw AI responses.
+        """
+        written = 0
+        for category, key in self.CATEGORY_KEY_MAP.items():
+            raw = report.get(key, {})
+            items = []
+            if isinstance(raw, dict):
+                items = [{"pattern": name, "frequency": float(freq)} for name, freq in raw.items()]
+            elif isinstance(raw, list):
+                items = [
+                    {
+                        "pattern": str(item.get("pattern", "")),
+                        "frequency": float(item.get("percentage", 0.0)),
+                    }
+                    for item in raw
+                    if item.get("pattern")
+                ]
+            for item in items:
+                pattern = item["pattern"]
+                frequency = item["frequency"]
+                title = f"{category}: {pattern}"
+                content = (
+                    f"## Pattern\n\n{pattern}\n\n"
+                    f"## Category\n\n{category}\n\n"
+                    f"## Frequency\n\n{frequency:.1f}%\n\n"
+                    f"## Recommendation\n\n{self._recommendation(category, pattern)}"
+                )
+                self.obsidian_knowledge_service.create_note(
+                    title=title,
+                    note_type=NoteType.INSIGHT,
+                    content=content,
+                    tags=["viral-pattern", category.lower()],
+                    confidence=round(self._report_confidence(report) * (frequency / 100), 2),
+                    source="pattern-report",
+                )
+                written += 1
+        return written

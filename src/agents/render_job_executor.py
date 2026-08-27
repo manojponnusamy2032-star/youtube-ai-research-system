@@ -24,6 +24,7 @@ class RenderRequest:
     render_config: RenderConfig = field(default_factory=RenderConfig)
     resolved_assets: list[str] = field(default_factory=list)
     resolved_characters: list[str] = field(default_factory=list)
+    motions: list[Any] = field(default_factory=list)
 
 
 class Renderer:
@@ -183,9 +184,23 @@ class RenderJobExecutor(BaseAgent):
                     render_config=render_config,
                     resolved_assets=resolved_assets,
                     resolved_characters=resolved_characters,
+                    motions=list(job.get("motions", [])) if isinstance(job.get("motions", []), list) else [],
                 )
                 
                 result = self.renderer.render(request)
+
+                # Preserve transition metadata carried by the input job so it
+                # reaches downstream consumers (e.g. VideoAssembler) even when
+                # the renderer does not propagate it itself. The default
+                # MockRenderer is one such case. Only backfill when the
+                # renderer did not already supply its own value, and remain a
+                # no-op when the job carries no transition, keeping existing
+                # behavior unchanged.
+                if (
+                    "transition_to_next" not in result
+                    and job.get("transition_to_next") is not None
+                ):
+                    result["transition_to_next"] = job["transition_to_next"]
 
                 # Optionally render audio for this job if an audio_request
                 # is present and an audio renderer is configured.
@@ -216,6 +231,28 @@ class RenderJobExecutor(BaseAgent):
             error result without raising.
         """
         audio_request = job.get("audio_request")
+        if isinstance(audio_request, dict):
+            # The render job plan serializes AudioRequest to a dict when it
+            # travels through the context; coerce it back to a typed request.
+            audio_request = AudioRequest(
+                scene_number=int(
+                    audio_request.get("scene_number", job.get("scene_number", 1))
+                ),
+                duration_seconds=int(
+                    audio_request.get(
+                        "duration_seconds", job.get("duration_seconds", 0)
+                    )
+                ),
+                narration_text=str(audio_request.get("narration_text", "")),
+                voice_reference=str(audio_request.get("voice_reference", "")),
+                background_music_reference=str(
+                    audio_request.get("background_music_reference", "")
+                ),
+                sound_effect_references=list(
+                    audio_request.get("sound_effect_references", [])
+                ),
+                audio_format=str(audio_request.get("audio_format", "wav")),
+            )
         if not isinstance(audio_request, AudioRequest):
             return {
                 "status": "failed",

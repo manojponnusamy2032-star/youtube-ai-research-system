@@ -288,12 +288,15 @@ class AnalysisService:
             logger.error(f"Failed to normalize analysis data: {e}\nData: {data}")
             raise AnalysisServiceError(f"Failed to validate analysis: {e}")
     
-    def analyze_transcript(self, transcript: Transcript) -> Analysis:
+    def analyze_transcript(self, transcript: Transcript, knowledge_context: str | None = None) -> Analysis:
         """
         Analyze a single transcript.
         
         Args:
             transcript: Transcript model instance to analyze
+            knowledge_context: Optional prior knowledge context from the Knowledge Brain
+                to inform the analysis. When provided, the LLM receives this as
+                supplementary context but must still base conclusions on the transcript.
             
         Returns:
             Analysis model instance with results
@@ -308,7 +311,7 @@ class AnalysisService:
         prepared_text = self._prepare_transcript(transcript)
         
         # Generate prompt
-        prompt = get_analysis_prompt(prepared_text)
+        prompt = get_analysis_prompt(prepared_text, knowledge_context=knowledge_context)
         
         # Send to LLM
         try:
@@ -347,11 +350,28 @@ class AnalysisService:
         return self.database_service.insert_analysis(analysis)
     
     def process_transcript(self, transcript: Transcript) -> tuple[bool, Optional[str]]:
+        """Process a single transcript: analyze and save.
+
+        Args:
+            transcript: Transcript model instance to process
+
+        Returns:
+            Tuple of (success: bool, error_message: Optional[str])
         """
-        Process a single transcript: analyze and save.
+        return self.process_transcript_with_context(transcript)
+
+    def process_transcript_with_context(
+        self,
+        transcript: Transcript,
+        knowledge_context: str | None = None,
+    ) -> tuple[bool, Optional[str]]:
+        """
+        Process a single transcript with optional knowledge context: analyze and save.
         
         Args:
             transcript: Transcript model instance to process
+            knowledge_context: Optional prior knowledge from the Knowledge Brain
+                to inform the LLM analysis.
             
         Returns:
             Tuple of (success: bool, error_message: Optional[str])
@@ -363,9 +383,12 @@ class AnalysisService:
             logger.info(f"Analysis already exists for {video_id}")
             return True, "already_exists"
         
-        # Analyze transcript
+        # Analyze transcript with optional knowledge context
         try:
-            analysis = self.analyze_transcript(transcript)
+            analysis = self.analyze_transcript(
+                transcript,
+                knowledge_context=knowledge_context,
+            )
         except AnalysisServiceError as e:
             logger.error(f"Analysis failed for {video_id}: {e}")
             return False, str(e)

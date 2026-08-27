@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from src.models.content_package import AudioRequest, RenderConfig, RenderJobPlan, RenderJobSpec
+from src.services.audio_renderer import AudioRenderRequest, AudioRenderer
 from src.services.stickman_renderer import render_stickman_job
 from src.services.video_assembler import VideoAssembler
 
@@ -32,6 +33,7 @@ class MultiSceneRenderer:
         self,
         config: RenderConfig | None = None,
         video_assembler: VideoAssembler | None = None,
+        audio_renderer: AudioRenderer | None = None,
     ) -> None:
         """Initialize the multi-scene renderer.
 
@@ -39,12 +41,41 @@ class MultiSceneRenderer:
             config: Optional RenderConfig. A default is used if omitted.
             video_assembler: Optional VideoAssembler. A new one with
                 execute_enabled=True is created if omitted.
+            audio_renderer: Optional AudioRenderer used to synthesize
+                narration per scene so the final assembly carries audio.
         """
         self.config = config if config is not None else RenderConfig()
         self.video_assembler = video_assembler or VideoAssembler(
             config=self.config,
             execute_enabled=True,
         )
+        self.audio_renderer = audio_renderer
+
+    def _render_scene_audio(
+        self, audio_request: AudioRequest | None, job_id: str
+    ) -> dict[str, Any]:
+        """Render narration audio for one scene, if an audio renderer is set.
+
+        Args:
+            audio_request: The scene's audio request, or None.
+            job_id: The scene job id for context.
+
+        Returns:
+            Audio render result dict, or an empty dict when there is nothing
+            to render or no audio renderer is configured.
+        """
+        if self.audio_renderer is None or audio_request is None:
+            return {}
+        if not audio_request.narration_text.strip():
+            return {}
+        request = AudioRenderRequest(
+            audio_request=audio_request,
+            job={"job_id": job_id},
+        )
+        try:
+            return self.audio_renderer.render(request)
+        except Exception:
+            return {}
 
     def render_plan(
         self,
@@ -142,11 +173,20 @@ class MultiSceneRenderer:
                 animation_instructions=str(job_data.get("animation_instructions", "")),
                 camera_instructions=str(job_data.get("camera_instructions", "")),
                 audio_requirements=str(job_data.get("audio_requirements", "")),
+                motions=list(job_data.get("motions", [])) if isinstance(job_data.get("motions", []), list) else [],
+                transition_to_next=job_data.get("transition_to_next"),
                 audio_request=audio_request,
             )
 
             # Render the scene
             result = render_stickman_job(job_spec, self.config)
+            # Render narration audio for this scene so the final assembly can
+            # preserve it. Scenes without narration yield an empty audio result.
+            audio_result = self._render_scene_audio(audio_request, job_id)
+            audio_reference = (
+                audio_result.get("audio_reference") if audio_result else None
+            )
+            result["audio_result"] = audio_result
             scene_results.append(result)
 
             if result.get("status") == "completed":
@@ -156,6 +196,8 @@ class MultiSceneRenderer:
                     "output_reference": result["output_reference"],
                     "status": "completed",
                     "duration_seconds": duration,
+                    "transition_to_next": job_data.get("transition_to_next"),
+                    "audio_reference": audio_reference,
                 })
             else:
                 render_outputs.append({
@@ -164,6 +206,7 @@ class MultiSceneRenderer:
                     "output_reference": None,
                     "status": "failed",
                     "duration_seconds": duration,
+                    "transition_to_next": job_data.get("transition_to_next"),
                 })
 
         # Check if all scenes rendered successfully

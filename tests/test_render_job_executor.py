@@ -243,6 +243,73 @@ def test_custom_renderer_is_used() -> None:
     assert job_result["duration_seconds"] == 999
 
 
+def test_render_job_executor_preserves_transition_to_next() -> None:
+    """RenderJobExecutor must preserve transition_to_next on execution results.
+
+    The default MockRenderer does not propagate transition_to_next itself, so
+    without backfill the metadata is lost before VideoAssembler consumes
+    render_results. The executor backfills the job's transition, but must not
+    overwrite a renderer-supplied value, and must be a no-op when the job
+    carries no transition (backward compatible).
+    """
+    transition = {"type": "crossfade", "duration": 0.25, "parameters": {}}
+
+    # --- MockRenderer path: backfill the job's transition onto the result ---
+    job = dict(_render_jobs()[0])
+    job["transition_to_next"] = transition
+
+    executor = RenderJobExecutor()
+    context = WorkflowContext()
+    context.set("render_jobs", [job])
+
+    result = executor.run(context)
+
+    assert result.success is True
+    job_result = result.data["render_results"][0]
+    assert job_result["transition_to_next"] == transition
+
+    # --- Backward compatibility: no transition on the job -> no key added ---
+    clean_job = dict(_render_jobs()[0])
+    context = WorkflowContext()
+    context.set("render_jobs", [clean_job])
+
+    result = executor.run(context)
+
+    job_result = result.data["render_results"][0]
+    assert "transition_to_next" not in job_result
+
+    # --- Renderer-provided transition must NOT be overwritten ---
+    class SelfReportingRenderer(Renderer):
+        def render(self, request: RenderRequest) -> dict[str, Any]:
+            return {
+                "job_id": str(request.job["job_id"]),
+                "status": "completed",
+                "output_reference": f"custom://render/{request.job['job_id']}",
+                "duration_seconds": int(request.job.get("duration_seconds", 0)),
+                "transition_to_next": {
+                    "type": "slide_left",
+                    "duration": 0.25,
+                    "parameters": {},
+                },
+            }
+
+    overwrite_job = dict(_render_jobs()[0])
+    overwrite_job["transition_to_next"] = {
+        "type": "fade",
+        "duration": 0.5,
+        "parameters": {},
+    }
+
+    executor = RenderJobExecutor(renderer=SelfReportingRenderer())
+    context = WorkflowContext()
+    context.set("render_jobs", [overwrite_job])
+
+    result = executor.run(context)
+
+    job_result = result.data["render_results"][0]
+    assert job_result["transition_to_next"]["type"] == "slide_left"
+
+
 def test_invalid_job_not_dict_returns_failure() -> None:
     """Test that non-dict job in list returns failure."""
     executor = RenderJobExecutor()

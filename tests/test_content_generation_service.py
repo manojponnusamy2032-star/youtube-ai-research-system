@@ -172,6 +172,72 @@ def test_create_video_production_plan_preserves_scenes_and_duration(tmp_path) ->
     db.disconnect()
 
 
+def test_create_video_production_plan_infers_scene_specific_motion_intents(tmp_path) -> None:
+    db = DatabaseService(str(tmp_path / "content.db"))
+    db.connect()
+    db.create_tables()
+    service = ContentGenerationService(db)
+    script_plan = ScriptPlan(
+        intro="Scene intent test",
+        sections=[],
+        cta="CTA",
+        scenes=[
+            {
+                "scene_number": 1,
+                "duration_seconds": 6,
+                "visual": "Opening shot: host on camera with text overlay",
+                "narration": "Start the story with a hook.",
+                "dialogue": "",
+                "sfx": "whoosh",
+            },
+            {
+                "scene_number": 2,
+                "duration_seconds": 8,
+                "visual": "Screen share: 3-step framework diagram",
+                "narration": "Break down the process step by step.",
+                "dialogue": "",
+                "sfx": "",
+            },
+            {
+                "scene_number": 3,
+                "duration_seconds": 7,
+                "visual": "Before/after comparison: metrics dashboard",
+                "narration": "Show the result and the proof.",
+                "dialogue": "",
+                "sfx": "",
+            },
+            {
+                "scene_number": 4,
+                "duration_seconds": 5,
+                "visual": "End screen: subscribe button and video links",
+                "narration": "Close with a clear call to action.",
+                "dialogue": "",
+                "sfx": "",
+            },
+        ],
+    )
+
+    production_plan = service.create_video_production_plan(script_plan)
+
+    assert [scene.motion_intent.scene_role for scene in production_plan.scenes] == [
+        "hook",
+        "explanation",
+        "proof",
+        "cta",
+    ]
+    assert production_plan.scenes[0].transition_to_next is not None
+    assert production_plan.scenes[0].transition_to_next.type == "crossfade"
+    assert production_plan.scenes[1].transition_to_next is not None
+    assert production_plan.scenes[1].transition_to_next.type in {"crossfade", "slide_right", "slide_left", "cut"}
+    assert production_plan.scenes[-1].transition_to_next is None
+    assert any(motion.type == "zoom" and motion.target == "camera" for motion in production_plan.scenes[0].motions)
+    assert any(motion.type in {"fade", "scale"} for motion in production_plan.scenes[1].motions)
+    assert any(motion.type == "pan" and motion.target == "camera" for motion in production_plan.scenes[2].motions)
+    assert any(motion.type == "exit" for motion in production_plan.scenes[3].motions)
+    assert production_plan.scenes[0].motions != production_plan.scenes[1].motions
+    db.disconnect()
+
+
 def test_video_production_plan_handles_empty_scenes(tmp_path) -> None:
     db = DatabaseService(str(tmp_path / "content.db"))
     db.connect()

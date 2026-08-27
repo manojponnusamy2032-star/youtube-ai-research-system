@@ -49,8 +49,8 @@ class FinalMediaOrchestrator:
 
         Args:
             render_outputs: List of render output records for VideoAssembler.
-            audio_requests: List of AudioRequest objects. Must contain exactly
-                one request for this first implementation.
+            audio_requests: List of AudioRequest objects, one or more per
+                rendered scene.
             output_path: Full path for the final output file.
 
         Returns:
@@ -141,8 +141,9 @@ class FinalMediaOrchestrator:
             raise ValueError("audio_requests must be a list")
         if len(audio_requests) == 0:
             raise ValueError("audio_requests cannot be empty")
-        if len(audio_requests) > 1:
-            raise ValueError("audio_requests must contain exactly one request")
+        scene_numbers = [request.scene_number for request in audio_requests]
+        if len(scene_numbers) != len(set(scene_numbers)):
+            raise ValueError("audio_requests must contain exactly one request per scene")
 
         if not output_path:
             raise ValueError("output_path cannot be empty")

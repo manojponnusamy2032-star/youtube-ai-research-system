@@ -18,6 +18,7 @@ def _create_output(
     scene_number: int,
     status: str = "completed",
     output_ref: str | None = None,
+    transition_to_next: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Create a test render output record."""
     if output_ref is None:
@@ -30,6 +31,7 @@ def _create_output(
         "status": status,
         "output_reference": output_ref,
         "duration_seconds": 10,
+        **({"transition_to_next": transition_to_next} if transition_to_next is not None else {}),
     }
 
 
@@ -199,6 +201,148 @@ def test_video_format_used_in_output_path() -> None:
     result = assembler.assemble(outputs)
 
     assert result["output_reference"].endswith("final_video.mkv")
+
+
+def test_transition_command_built_for_non_cut_transition() -> None:
+    """Test that structured transitions build a filter-complex FFmpeg command."""
+    assembler = VideoAssembler()
+
+    outputs = [
+        _create_output(
+            "job-1",
+            1,
+            output_ref="scene_1.mp4",
+            transition_to_next={
+                "type": "crossfade",
+                "duration": 0.25,
+                "parameters": {"curve": "smooth"},
+            },
+        ),
+        _create_output("job-2", 2, output_ref="scene_2.mp4"),
+    ]
+
+    result = assembler.assemble(outputs)
+
+    assert result["status"] == "command_built"
+    assert "-filter_complex" in result["command"]
+    assert "xfade" in result["filter_complex"]
+    assert "acrossfade" in result["filter_complex"]
+
+
+# --- Audio edge-case tests ---
+
+
+def _with_audio(output: dict[str, Any], has_audio: bool) -> dict[str, Any]:
+    """Attach explicit has_audio flag to a render output record."""
+    record = dict(output)
+    record["has_audio"] = has_audio
+    return record
+
+
+def _audio_transition_outputs(audio_flags: tuple[bool, ...]) -> list[dict[str, Any]]:
+    """Create scene outputs with an explicit crossfade and given audio flags."""
+    outputs = [
+        _create_output(
+            f"job-{num}",
+            num,
+            output_ref=f"scene_{num}.mp4",
+            transition_to_next=(
+                {"type": "crossfade", "duration": 0.25, "parameters": {}}
+                if num < len(audio_flags)
+                else None
+            ),
+        )
+        for num in range(1, len(audio_flags) + 1)
+    ]
+    return [_with_audio(out, flag) for out, flag in zip(outputs, audio_flags)]
+
+
+def test_transition_audio_plus_audio_uses_live_audio_streams() -> None:
+    """audio + audio must reference real audio streams (no silence synthesis)."""
+    result = VideoAssembler().assemble(_audio_transition_outputs((True, True)))
+
+    assert "filter_complex" in result
+    assert "anullsrc" not in result["command"], "No silence synthesis for two audio scenes"
+    assert "acrossfade" in result["filter_complex"]
+    assert "[0:a]asetpts" in result["filter_complex"]
+    assert "[1:a]asetpts" in result["filter_complex"]
+
+
+def _has_anullsrc(command: list[str]) -> bool:
+    """Return True if any command argument is or contains an anullsrc source."""
+    return any("anullsrc" in arg for arg in command)
+
+
+def test_transition_audio_plus_no_audio_synthesizes_silence() -> None:
+    """audio + no audio must synthesize silence for the silent scene."""
+    result = VideoAssembler().assemble(_audio_transition_outputs((True, False)))
+
+    assert "filter_complex" in result
+    assert _has_anullsrc(result["command"])
+    # The silent scene's audio label (srca1) must be present and fed by silence
+    assert "srca1" in result["filter_complex"], \
+        "Silent scene override should provide audio label for the second scene"
+    assert "acrossfade" in result["filter_complex"]
+
+
+def test_transition_no_audio_plus_audio_synthesizes_silence() -> None:
+    """no audio + audio must synthesize silence for the silent scene."""
+    result = VideoAssembler().assemble(_audio_transition_outputs((False, True)))
+
+    assert "filter_complex" in result
+    assert _has_anullsrc(result["command"])
+    # The silent scene's audio label (srca0) must be present and fed by silence
+    assert "srca0" in result["filter_complex"], \
+        "Silent scene override should provide audio label for the first scene"
+    assert "acrossfade" in result["filter_complex"]
+
+
+def test_transition_no_audio_plus_no_audio_synthesizes_both() -> None:
+    """no audio + no audio must synthesize silence for both scenes."""
+    result = VideoAssembler().assemble(_audio_transition_outputs((False, False)))
+
+    assert "filter_complex" in result
+    # Two silent scenes -> two anullsrc inputs
+    anullsrc_count = sum(1 for arg in result["command"] if "anullsrc" in arg)
+    assert anullsrc_count == 2
+    assert "acrossfade" in result["filter_complex"]
+
+
+def test_mixed_audio_without_transition_uses_filter_command() -> None:
+    """Mixed audio (audio + no audio) without transitions still uses filter path."""
+    outputs = [
+        _with_audio(_create_output("job-1", 1, output_ref="scene_1.mp4"), True),
+        _with_audio(_create_output("job-2", 2, output_ref="scene_2.mp4"), False),
+    ]
+    result = VideoAssembler().assemble(outputs)
+
+    assert "filter_complex" in result, \
+        "Mixed audio scenes must use the filter path to preserve audio"
+    assert _has_anullsrc(result["command"])
+
+
+def test_uniform_audio_without_transition_uses_concat() -> None:
+    """Uniform audio (audio + audio) without transitions keeps concat path."""
+    outputs = [
+        _with_audio(_create_output("job-1", 1, output_ref="scene_1.mp4"), True),
+        _with_audio(_create_output("job-2", 2, output_ref="scene_2.mp4"), True),
+    ]
+    result = VideoAssembler().assemble(outputs)
+
+    assert "concat_content" in result
+    assert "filter_complex" not in result
+
+
+def test_uniform_no_audio_without_transition_uses_concat() -> None:
+    """Uniform no-audio (no audio + no audio) without transitions keeps concat path."""
+    outputs = [
+        _with_audio(_create_output("job-1", 1, output_ref="scene_1.mp4"), False),
+        _with_audio(_create_output("job-2", 2, output_ref="scene_2.mp4"), False),
+    ]
+    result = VideoAssembler().assemble(outputs)
+
+    assert "concat_content" in result
+    assert "filter_complex" not in result
 
 
 # --- Execution tests (mocked) ---

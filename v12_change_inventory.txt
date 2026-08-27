@@ -1,0 +1,28 @@
+﻿ .env.example                               |    3 +
+ pytest.ini                                 |    1 +
+ src/agents/analysis_agent.py               |   51 +-
+ src/agents/knowledge_base_agent.py         |   55 +-
+ src/agents/render_job_executor.py          |   37 +
+ src/agents/render_job_manager.py           |    2 +
+ src/agents/render_output_manager.py        |   19 +
+ src/api/app.py                             |    2 +
+ src/api/dependencies.py                    |   60 +-
+ src/models/content_package.py              |  155 +++
+ src/pipeline/auto_publish_pipeline.py      |  437 +++++++-
+ src/prompts/analysis_prompt.py             |   25 +-
+ src/services/analysis_service.py           |   35 +-
+ src/services/content_generation_service.py |  627 ++++++++++-
+ src/services/final_media_orchestrator.py   |    9 +-
+ src/services/multi_scene_renderer.py       |   45 +-
+ src/services/scene_video_renderer.py       |   10 +-
+ src/services/stickman_renderer.py          | 1579 +++++++++++++++++++++++++++-
+ src/services/video_assembler.py            |  308 +++++-
+ src/utils/config.py                        |    6 +
+ tests/integration/test_video_assembly.py   |  283 ++++-
+ tests/test_content_generation_service.py   |   66 ++
+ tests/test_multi_scene_renderer.py         |  135 ++-
+ tests/test_render_job_executor.py          |   67 ++
+ tests/test_stickman_renderer.py            |   33 +
+ tests/test_video_assembler.py              |  144 +++
+ 26 files changed, 4053 insertions(+), 141 deletions(-)
+10

@@ -1,0 +1,28 @@
+﻿{
+  "title": "The Focus Paradox: Why Less Studying Gets Better Results",
+  "description": "Discover the counterintuitive truth about focused learning vs. marathon cramming sessions.",
+  "tags": ["productivity", "learning", "study", "focus"],
+  "format": "shorts",
+  "category_id": "27",
+  "privacy_status": "private",
+  "scenes": [
+    {
+      "narration": "Most people think studying longer means learning more. But science says otherwise.",
+      "caption": "Longer study â‰  Better learning",
+      "visual": {
+        "scene_role": "hook",
+        "primary_focus": "character",
+        "camera_pattern": "zoom_in",
+        "energy": "high",
+        "character_action": "talk",
+        "visual_prompt": "A student sits at a desk surrounded by towering stacks of books, looking overwhelmed and frustrated. A clock on the wall shows time passing rapidly.",
+        "animation_instructions": "Student appears at desk. Books stack up procedurally. Clock hands spin fast. Student's expression shifts from determined to frustrated.",
+        "camera_instructions": "Start wide on the desk, slow zoom in to student's face as frustration builds.",
+        "motions": [
+          {"target": "character", "type": "enter", "start_time": 0.0, "duration": 1.5, "easing": "ease_out"},
+          {"target": "object", "object_name": "books", "type": "move", "start_time": 1.0, "duration": 2.0, "parameters": {"from": [0, 100], "to": [0, 0]}, "easing": "ease_out"},
+          {"target": "camera", "type": "zoom", "start_time": 0.0, "duration": 4.0, "parameters": {"from": 1.0, "to": 1.5}, "easing": "linear"}
+        ],
+        "transition": {"type": "crossfade", "duration": 0.5}
+      }
+    },

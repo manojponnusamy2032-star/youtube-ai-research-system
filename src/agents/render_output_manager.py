@@ -113,6 +113,25 @@ class RenderOutputManager(BaseAgent):
                 "duration_seconds": int(result.get("duration_seconds", 0)),
                 "scene_number": result.get("scene_number"),
             }
+
+            # Preserve narration audio carried on the render result so it can
+            # reach the assembler. Scenes without audio keep None and still
+            # assemble with synthesized silence.
+            audio_result = result.get("audio_result")
+            if isinstance(audio_result, dict):
+                output_record["audio_reference"] = audio_result.get(
+                    "audio_reference"
+                )
+                output_record["audio_duration_seconds"] = audio_result.get(
+                    "duration_seconds"
+                )
+                output_record["audio_status"] = audio_result.get(
+                    "status", "unknown"
+                )
+            else:
+                output_record["audio_reference"] = None
+                output_record["audio_duration_seconds"] = None
+                output_record["audio_status"] = "no_audio"
             
             outputs.append(output_record)
         

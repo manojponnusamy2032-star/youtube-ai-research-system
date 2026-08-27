@@ -226,8 +226,14 @@ class SceneVideoRenderer:
 
     @staticmethod
     def _escape_filter_path(path: str) -> str:
-        """Escape a path for use inside an FFmpeg filter argument."""
-        return path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+        """Escape a path for use inside an FFmpeg filter argument.
+
+        On Windows, paths with drive letters (e.g., C:/Windows/Fonts/arialbd.ttf)
+        contain colons that FFmpeg's filter parser treats as option delimiters.
+        The solution is to escape colons AND wrap the entire path in single quotes.
+        """
+        escaped = path.replace("\\", "/").replace(":", "\\:")
+        return f"'{escaped}'"
 
     @staticmethod
     def _detect_font() -> str:

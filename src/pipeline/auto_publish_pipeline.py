@@ -13,10 +13,19 @@ import logging
 import os
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from src.models.content_package import RenderConfig
+from src.models.content_package import (
+    AudioRequest,
+    Motion,
+    MotionIntent,
+    RenderConfig,
+    RenderJobSpec,
+    Transition,
+    SUPPORTED_MOTION_TYPES,
+    SUPPORTED_TRANSITION_TYPES,
+)
 from src.services.media_muxer import MediaMuxer
 from src.services.piper_tts_service import PiperTTSService
 from src.services.scene_video_renderer import (
@@ -25,6 +34,7 @@ from src.services.scene_video_renderer import (
     SceneVideoRenderer,
     VideoFormat,
 )
+from src.services.stickman_renderer import StickmanRenderer
 from src.services.tts_service import TTSRequest, TTSService
 from src.services.video_assembler import VideoAssembler
 from src.services.youtube_upload_service import (
@@ -39,12 +49,116 @@ SCENE_PADDING_SECONDS = 0.4
 
 
 @dataclass
+class VisualScene:
+    """Visual intent for a scene, mapped to the existing rendering architecture."""
+
+    # High-level scene role for motion intent
+    scene_role: str = "general"
+    # Primary visual focus
+    primary_focus: str = "scene"
+    # Camera pattern: hold, zoom_in, zoom_out, pan, tracking, follow
+    camera_pattern: str = "hold"
+    # Energy level: low, medium, high
+    energy: str = "medium"
+
+    # Optional structured motions (reuses existing Motion type)
+    motions: list[Motion] = field(default_factory=list)
+
+    # Optional transition to next scene
+    transition: Transition | None = None
+
+    # Legacy text instructions (used by StickmanRenderer's fallback logic)
+    visual_prompt: str = ""
+    animation_instructions: str = ""
+    camera_instructions: str = ""
+
+    # Character action (idle, walk, run, point, wave, jump, talk, surprised)
+    character_action: str = "idle"
+
+    # Background color (FFmpeg color string, e.g., "0x101820")
+    background_color: str = "0x101820"
+
+    # Optional background image path
+    background_image: str | None = None
+
+    # --- Structured visual composition (Visual Quality v1) ---
+    # Characters: [{name, pose, emotion, x, y, scale, color}]
+    characters: list[dict[str, Any]] = field(default_factory=list)
+    # Objects: [{name, type, x, y, scale, rotation, opacity}]
+    objects: list[dict[str, Any]] = field(default_factory=list)
+    # Environment: {type, background_color, ground_color, ground_y}
+    environment: dict[str, Any] = field(default_factory=dict)
+    # Text elements: [{text, x, y, size, color, opacity, style, fade_in, fade_out}]
+    text_elements: list[dict[str, Any]] = field(default_factory=list)
+    # Visual effects: [{type, target, start, duration, parameters}]
+    visual_effects: list[dict[str, Any]] = field(default_factory=list)
+    # Camera spec: {pattern, focus_target, duration, easing}
+    camera_spec: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and normalize fields."""
+        self.scene_role = str(self.scene_role).strip().lower() or "general"
+        self.primary_focus = str(self.primary_focus).strip().lower() or "scene"
+        self.camera_pattern = str(self.camera_pattern).strip().lower() or "hold"
+        self.energy = str(self.energy).strip().lower() or "medium"
+        if self.energy not in {"low", "medium", "high"}:
+            self.energy = "medium"
+        self.character_action = str(self.character_action).strip().lower() or "idle"
+        supported_actions = {"idle", "walk", "run", "point", "wave", "jump", "talk", "surprised"}
+        if self.character_action not in supported_actions:
+            self.character_action = "idle"
+        # Validate motions
+        for motion in self.motions:
+            if not isinstance(motion, Motion):
+                raise ValueError("motions must be list of Motion objects")
+            motion.validate(self.duration_seconds if hasattr(self, 'duration_seconds') else None, allow_overflow=True)
+
+    @property
+    def duration_seconds(self) -> float:
+        """Estimated scene duration (needed for motion validation)."""
+        # This will be set by the pipeline after TTS
+        return getattr(self, '_duration_seconds', 0.0)
+
+    @duration_seconds.setter
+    def duration_seconds(self, value: float) -> None:
+        self._duration_seconds = float(value)
+
+    def to_motion_intent(self) -> MotionIntent:
+        """Convert to MotionIntent for high-level guidance."""
+        return MotionIntent(
+            scene_role=self.scene_role,
+            primary_focus=self.primary_focus,
+            camera_pattern=self.camera_pattern,
+            energy=self.energy,
+        )
+
+    def has_visual_intent(self) -> bool:
+        """Check if this scene has meaningful visual intent beyond caption."""
+        return (
+            self.motions
+            or self.transition is not None
+            or self.visual_prompt.strip()
+            or self.animation_instructions.strip()
+            or self.camera_instructions.strip()
+            or self.character_action != "idle"
+            or self.camera_pattern != "hold"
+            or self.background_image is not None
+            or bool(self.characters)
+            or bool(self.objects)
+            or bool(self.environment)
+            or bool(self.text_elements)
+            or bool(self.visual_effects)
+        )
+
+
+@dataclass
 class ScenePlan:
     """A single narrated scene of the video plan."""
 
     narration: str
     caption: str = ""
     background_image: str | None = None
+    visual: VisualScene | None = None
 
     def __post_init__(self) -> None:
         """Validate the scene and default the caption to the narration."""
@@ -52,6 +166,8 @@ class ScenePlan:
             raise ValueError("scene narration cannot be empty")
         if not self.caption.strip():
             self.caption = self.narration
+        if self.visual is None:
+            self.visual = VisualScene()
 
     @property
     def display_caption(self) -> str:
@@ -88,7 +204,53 @@ class VideoPlan:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "VideoPlan":
         """Build a plan from a JSON-style dictionary."""
-        scenes = [ScenePlan(**scene) for scene in payload.get("scenes", [])]
+        scenes = []
+        for scene_data in payload.get("scenes", []):
+            visual_data = scene_data.pop("visual", None)
+            if visual_data:
+                # Convert visual data to VisualScene object
+                motions_data = visual_data.pop("motions", [])
+                motions = []
+                for m in motions_data:
+                    # Handle object_name field - map to target_id
+                    m_copy = dict(m)
+                    if "object_name" in m_copy:
+                        m_copy["target_id"] = m_copy.pop("object_name")
+
+                    # Convert list-based from/to parameters to dict format for interpolate_value
+                    params = m_copy.get("parameters", {})
+                    if isinstance(params, dict):
+                        for key in ("from", "to"):
+                            if key in params and isinstance(params[key], list) and len(params[key]) == 2:
+                                params[key] = {"x": params[key][0], "y": params[key][1]}
+                        m_copy["parameters"] = params
+
+                    # Map character action motion types to "emphasize" with action parameter
+                    motion_type = m_copy.get("type", "").lower()
+                    if motion_type in {"idle", "talk", "surprised", "walk", "run", "point", "wave", "jump"}:
+                        action = m_copy.pop("type")
+                        m_copy["type"] = "emphasize"
+                        m_copy["parameters"] = {**m_copy.get("parameters", {}), "action": action}
+
+                    motions.append(Motion(**m_copy))
+
+                transition_data = visual_data.pop("transition", None)
+                if transition_data:
+                    transition = Transition(**transition_data)
+                else:
+                    transition = None
+
+                visual = VisualScene(
+                    motions=motions,
+                    transition=transition,
+                    **visual_data
+                )
+            else:
+                visual = None
+
+            scene = ScenePlan(visual=visual, **scene_data)
+            scenes.append(scene)
+
         return cls(
             title=payload.get("title", ""),
             description=payload.get("description", ""),
@@ -227,24 +389,277 @@ class AutoPublishPipeline:
     ) -> dict[str, Any]:
         """Render one clip per scene, matching its narration duration."""
         render_outputs: list[dict[str, Any]] = []
+
+        # Initialize stickman renderer for visual scenes
+        stickman_renderer = StickmanRenderer(execute_enabled=True)
+
         for scene, segment in zip(plan.scenes, segments):
-            record = self.scene_renderer.render_scene(
-                scene_number=segment["scene_number"],
-                text=scene.display_caption,
-                duration_seconds=segment["duration_seconds"] + SCENE_PADDING_SECONDS,
-                video_format=plan.format,
-                background_image=scene.background_image,
-            )
+            scene_number = segment["scene_number"]
+            duration = segment["duration_seconds"] + SCENE_PADDING_SECONDS
+            video_format = plan.format
+
+            # Update visual scene with duration for motion validation
+            if scene.visual:
+                scene.visual.duration_seconds = duration
+
+            # Determine rendering path: visual or caption-only
+            if scene.visual and scene.visual.has_visual_intent():
+                # Use StickmanRenderer for visual scenes
+                record = self._render_visual_scene(
+                    scene=scene,
+                    segment=segment,
+                    scene_number=scene_number,
+                    duration=duration,
+                    video_format=video_format,
+                    stickman_renderer=stickman_renderer,
+                )
+            else:
+                # Use SceneVideoRenderer for backward-compatible caption-only scenes
+                record = self.scene_renderer.render_scene(
+                    scene_number=scene_number,
+                    text=scene.display_caption,
+                    duration_seconds=duration,
+                    video_format=video_format,
+                    background_image=scene.background_image,
+                )
+
             if record.get("status") != "completed":
                 return {
                     "status": "failed",
                     "stage": "scene_render",
                     "error": record.get("error", "Scene render failed"),
-                    "scene_number": segment["scene_number"],
+                    "scene_number": scene_number,
                     "details": record,
                 }
             render_outputs.append(record)
         return {"status": "completed", "render_outputs": render_outputs}
+
+    def _render_visual_scene(
+        self,
+        scene: ScenePlan,
+        segment: dict[str, Any],
+        scene_number: int,
+        duration: float,
+        video_format: VideoFormat,
+        stickman_renderer: StickmanRenderer,
+    ) -> dict[str, Any]:
+        """Render a scene with visual intent using StickmanRenderer."""
+        from src.models.content_package import AudioRequest, RenderConfig, RenderJobSpec
+
+        visual = scene.visual
+
+        # Build RenderConfig (StickmanRenderer uses hardcoded background; config params are for output path/sizing)
+        config = RenderConfig(
+            width=video_format.width,
+            height=video_format.height,
+            fps=video_format.fps,
+            aspect_ratio="9:16" if video_format.is_vertical else "16:9",
+            output_directory=self.scene_directory,
+        )
+
+        # Build AudioRequest from TTS segment
+        audio_request = AudioRequest(
+            scene_number=scene_number,
+            duration_seconds=int(duration),
+            narration_text=scene.narration,
+            voice_reference=segment.get("audio_reference", ""),
+            background_music_reference="",
+            sound_effect_references=[],
+            audio_format="aac",
+        )
+
+        # Build motions list from visual.motions (already parsed as Motion objects).
+        # Structured scene fields are the canonical path. Only use legacy text-based
+        # motion fallbacks when no structured composition is present.
+        motions = visual.motions.copy()
+        structured_visual = (
+            bool(getattr(visual, "characters", None))
+            or bool(getattr(visual, "objects", None))
+            or bool(getattr(visual, "environment", None))
+            or bool(getattr(visual, "text_elements", None))
+            or bool(getattr(visual, "visual_effects", None))
+            or bool(getattr(visual, "camera_spec", None))
+        )
+
+        legacy_visual_prompt = visual.visual_prompt
+        legacy_animation_instructions = visual.animation_instructions
+        legacy_camera_instructions = visual.camera_instructions
+
+        if structured_visual:
+            legacy_visual_prompt = ""
+            legacy_animation_instructions = ""
+            legacy_camera_instructions = ""
+        else:
+            # Add legacy character action and camera motion only when structured
+            # scene composition is not present, preserving backwards compatibility.
+            if visual.character_action and visual.character_action != "idle":
+                character_motion = Motion(
+                    type="emphasize",
+                    target="character",
+                    start_time=0.0,
+                    duration=duration,
+                    easing="ease_in_out",
+                    parameters={"action": visual.character_action},
+                )
+                motions.append(character_motion)
+
+            if visual.camera_pattern and visual.camera_pattern not in {"hold", "static"}:
+                camera_type = "zoom"
+                camera_params = {"from": 1.0, "to": 1.5}
+                if visual.camera_pattern in {"zoom_in", "zoom"}:
+                    camera_type = "zoom"
+                    camera_params = {"from": 1.0, "to": 1.5}
+                elif visual.camera_pattern == "zoom_out":
+                    camera_type = "zoom"
+                    camera_params = {"from": 1.5, "to": 1.0}
+                elif visual.camera_pattern in {"pan", "tracking", "follow"}:
+                    camera_type = "pan"
+                    camera_params = {"from": {"x": 0.0, "y": 0.0}, "to": {"x": 0.15, "y": 0.0}}
+
+                camera_motion = Motion(
+                    type=camera_type,
+                    target="camera",
+                    start_time=0.0,
+                    duration=duration,
+                    easing="ease_in_out",
+                    parameters=camera_params,
+                )
+                motions.append(camera_motion)
+
+        # Build transition
+        transition_to_next = visual.transition
+        if transition_to_next is None and visual.camera_pattern in {"pan", "tracking", "follow"}:
+            transition_to_next = Transition(type="crossfade", duration=0.5)
+
+        # Structured visual description consumed by StickmanRenderer.
+        visual_description: dict[str, Any] | None = None
+        if structured_visual:
+            visual_description = self._stage_structured_visual(
+                visual,
+                duration,
+                transition_to_next,
+            )
+
+        # Create RenderJobSpec
+        job_spec = RenderJobSpec(
+            job_id=f"scene_{scene_number:03d}",
+            scene_number=scene_number,
+            duration_seconds=int(duration),
+            render_type="stickman_animation",
+            character_ids=[],
+            asset_ids=[],
+            visual_prompt=legacy_visual_prompt,
+            animation_instructions=legacy_animation_instructions,
+            camera_instructions=legacy_camera_instructions,
+            audio_requirements="",
+            motions=motions,
+            transition_to_next=transition_to_next,
+            audio_request=audio_request,
+            visual_description=visual_description,
+        )
+
+        # Render using StickmanRenderer via render_stickman_job function
+        from src.services.stickman_renderer import render_stickman_job
+        record = render_stickman_job(job_spec, config)
+        if isinstance(record, dict):
+            if "scene_number" not in record:
+                record["scene_number"] = scene_number
+            if "transition_to_next" not in record and job_spec.transition_to_next is not None:
+                transition = job_spec.transition_to_next
+                record["transition_to_next"] = transition.to_dict() if hasattr(transition, "to_dict") else dict(transition)
+        return record
+
+    @staticmethod
+    def _stage_structured_visual(
+        visual: VisualScene,
+        duration: float,
+        transition: Transition | None,
+    ) -> dict[str, Any]:
+        """Apply presentation staging before the structured render handoff."""
+        characters: list[dict[str, Any]] = []
+        for character in getattr(visual, "characters", []) or []:
+            staged = character.to_dict() if hasattr(character, "to_dict") else dict(character)
+            # V1.2: larger characters framed inside the central composition.
+            staged["scale"] = min(3.0, float(staged.get("scale", 1.0)) * 1.25)
+            staged["x"] = max(0.15, min(0.85, float(staged.get("x", 0.5))))
+            staged["y"] = min(0.84, max(0.58, float(staged.get("y", 0.75)) - 0.06))
+            characters.append(staged)
+
+        objects = [
+            item.to_dict() if hasattr(item, "to_dict") else dict(item)
+            for item in (getattr(visual, "objects", []) or [])
+        ]
+        if visual.scene_role == "object_interaction" and characters and objects:
+            target_x = float(objects[0].get("x", 0.5))
+            # V1.2: approach the interacted object from whichever side the
+            # character is already on, closing in without crossing behind it.
+            offset = -0.20 if float(characters[0].get("x", 0.5)) <= target_x else 0.20
+            characters[0]["x"] = max(0.15, min(0.85, target_x + offset))
+            # Keep the focal object inside the central vertical band too.
+            objects[0]["y"] = min(0.78, max(0.30, float(objects[0].get("y", 0.5))))
+
+        # V1.2.1: large floor props (scale > 1.0, standing on the ground)
+        # claim a footprint that characters may not stand inside -- this is
+        # what previously let characters overlap desks/boards ("speed-line"
+        # style clutter). Characters are pushed to the clearest side.
+        claims = [
+            (float(obj.get("x", 0.5)), 0.16 * float(obj.get("scale", 1.0)) + 0.02)
+            for obj in objects
+            if float(obj.get("scale", 1.0)) > 1.0
+            and float(obj.get("y", 0.5)) >= 0.55
+        ]
+        if claims:
+            gap = 0.09
+
+            def _clearance(pos: float) -> float:
+                return min(
+                    (abs(pos - float(obj.get("x", 0.5))) for obj in objects),
+                    default=1.0,
+                )
+
+            for staged in characters:
+                cx = float(staged.get("x", 0.5))
+                for claim in claims:
+                    ox, half = claim
+                    if not (ox - half <= cx <= ox + half):
+                        continue
+                    options = [
+                        pos
+                        for pos in (ox - half - gap, ox + half + gap)
+                        if 0.05 <= pos <= 0.95
+                        and all(
+                            not (o - h - gap <= pos <= o + h + gap)
+                            for o, h in claims
+                            if (o, h) != claim
+                        )
+                    ]
+                    if options:
+                        cx = max(options, key=_clearance)
+                    else:
+                        cx = ox - half - gap if cx <= ox else ox + half + gap
+                    staged["x"] = round(max(0.05, min(0.95, cx)), 4)
+                    break
+
+        text_elements: list[dict[str, Any]] = []
+        fade_out = float(transition.duration) if transition and transition.type != "cut" else 0.0
+        for text in getattr(visual, "text_elements", []) or []:
+            staged = text.to_dict() if hasattr(text, "to_dict") else dict(text)
+            if fade_out > 0.0:
+                staged["duration"] = duration
+                staged["fade_out"] = max(float(staged.get("fade_out", 0.0)), fade_out)
+            text_elements.append(staged)
+
+        return {
+            "characters": characters,
+            "objects": objects,
+            "environment": dict(getattr(visual, "environment", {}) or {}),
+            "text_elements": text_elements,
+            "effects": [
+                item.to_dict() if hasattr(item, "to_dict") else dict(item)
+                for item in (getattr(visual, "visual_effects", []) or [])
+            ],
+            "camera": dict(getattr(visual, "camera_spec", {}) or {}),
+        }
 
     def _assemble(
         self, render_outputs: list[dict[str, Any]], video_format: VideoFormat

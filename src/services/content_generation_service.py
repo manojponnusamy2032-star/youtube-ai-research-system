@@ -6,7 +6,7 @@ from dataclasses import replace
 from typing import Any
 
 from src.database.database_service import DatabaseService
-from src.models.content_package import ContentPackage, HookPlan, ScriptPlan, SeoPlan, ThumbnailPlan, VideoProductionPlan, VideoProductionScene, SceneAsset, SceneAssetPlan, CharacterSpec, VisualStylePlan, CharacterAssetSpec, CharacterAssetPlan, RenderJobSpec, RenderJobPlan
+from src.models.content_package import ContentPackage, HookPlan, ScriptPlan, SeoPlan, ThumbnailPlan, VideoProductionPlan, VideoProductionScene, SceneAsset, SceneAssetPlan, CharacterSpec, VisualStylePlan, CharacterAssetSpec, CharacterAssetPlan, RenderJobSpec, RenderJobPlan, Motion, MotionIntent, Transition, AudioRequest
 from src.models.idea import Idea
 from src.services.script_service import ScriptService
 from src.services.title_generation_service import TitleGenerationService
@@ -491,19 +491,62 @@ class ContentGenerationService:
         """
         scenes = []
         total_duration = 0
-        
-        for scene_data in script_plan.scenes:
+        previous_motion_intent: MotionIntent | None = None
+        previous_transition_type: str = "cut"
+        scene_count = len(script_plan.scenes)
+
+        for index, scene_data in enumerate(script_plan.scenes):
             scene_number = int(scene_data.get("scene_number", len(scenes) + 1))
             duration_seconds = int(scene_data.get("duration_seconds", 30))
             visual = str(scene_data.get("visual", ""))
             narration = str(scene_data.get("narration", ""))
             dialogue = str(scene_data.get("dialogue", ""))
             sfx = str(scene_data.get("sfx", ""))
-            
-            # Apply sensible defaults for production direction
-            camera_direction = self._default_camera_direction(scene_number, visual)
-            animation_direction = self._default_animation_direction(visual)
-            transition = self._default_transition(scene_number)
+
+            motion_intent = self._infer_motion_intent(
+                scene_number=scene_number,
+                total_scenes=scene_count,
+                duration_seconds=duration_seconds,
+                visual=visual,
+                narration=narration,
+                dialogue=dialogue,
+                previous_motion_intent=previous_motion_intent,
+            )
+
+            # Apply sensible defaults for production direction, now guided by motion intent.
+            camera_direction = self._default_camera_direction(scene_number, visual, motion_intent, previous_motion_intent)
+            animation_direction = self._default_animation_direction(visual, motion_intent)
+            next_motion_intent = None
+            next_scene_data = script_plan.scenes[index + 1] if index + 1 < scene_count else None
+            if next_scene_data is not None:
+                next_motion_intent = self._infer_motion_intent(
+                    scene_number=int(next_scene_data.get("scene_number", scene_number + 1)),
+                    total_scenes=scene_count,
+                    duration_seconds=int(next_scene_data.get("duration_seconds", duration_seconds)),
+                    visual=str(next_scene_data.get("visual", "")),
+                    narration=str(next_scene_data.get("narration", "")),
+                    dialogue=str(next_scene_data.get("dialogue", "")),
+                    previous_motion_intent=motion_intent,
+                )
+            transition = self._default_transition(scene_number, motion_intent, next_motion_intent, previous_transition_type)
+            motions = self._build_scene_motions(
+                scene_number=scene_number,
+                duration_seconds=duration_seconds,
+                visual=visual,
+                narration=narration,
+                dialogue=dialogue,
+                camera_direction=camera_direction,
+                animation_direction=animation_direction,
+                motion_intent=motion_intent,
+                previous_motion_intent=previous_motion_intent,
+            )
+            transition_to_next = self._default_transition_to_next(
+                scene_number=scene_number,
+                total_scenes=scene_count,
+                current_intent=motion_intent,
+                next_intent=next_motion_intent,
+                previous_transition_type=previous_transition_type,
+            )
             
             scene = VideoProductionScene(
                 scene_number=scene_number,
@@ -515,9 +558,15 @@ class ContentGenerationService:
                 camera_direction=camera_direction,
                 animation_direction=animation_direction,
                 transition=transition,
+                motions=motions,
+                motion_intent=motion_intent,
+                transition_to_next=transition_to_next,
             )
             scenes.append(scene)
             total_duration += duration_seconds
+            previous_motion_intent = motion_intent
+            if transition_to_next is not None:
+                previous_transition_type = transition_to_next.type
         
         # Use script intro as title base, or fallback to topic
         title = script_plan.intro[:50] + "..." if len(script_plan.intro) > 50 else script_plan.intro
@@ -528,9 +577,28 @@ class ContentGenerationService:
             scenes=scenes,
         )
 
-    def _default_camera_direction(self, scene_number: int, visual: str) -> str:
+    def _default_camera_direction(
+        self,
+        scene_number: int,
+        visual: str,
+        motion_intent: MotionIntent | None = None,
+        previous_motion_intent: MotionIntent | None = None,
+    ) -> str:
         """Generate sensible camera direction based on scene position and visual content."""
         visual_lower = visual.lower()
+        if motion_intent:
+            if motion_intent.scene_role == "hook":
+                return "Wide establishing shot, slow zoom in"
+            if motion_intent.scene_role == "proof":
+                return "Split-screen with smooth pan across both sides"
+            if motion_intent.scene_role == "cta":
+                return "Medium close-up, slight tilt up for engagement"
+            if motion_intent.camera_pattern == "pan":
+                return "Dynamic pan across the frame"
+            if motion_intent.camera_pattern == "zoom":
+                return "Slow zoom in"
+            if motion_intent.camera_pattern == "pull_back":
+                return "Gentle pull back"
         if "opening" in visual_lower or "intro" in visual_lower:
             return "Wide establishing shot, slow zoom in"
         elif "b-roll" in visual_lower or "screen share" in visual_lower:
@@ -546,9 +614,20 @@ class ContentGenerationService:
         else:
             return "Medium shot, steady framing"
 
-    def _default_animation_direction(self, visual: str) -> str:
+    def _default_animation_direction(self, visual: str, motion_intent: MotionIntent | None = None) -> str:
         """Generate animation direction based on visual content."""
         visual_lower = visual.lower()
+        if motion_intent:
+            if motion_intent.scene_role == "hook":
+                return "Character and text enter with punchy emphasis"
+            if motion_intent.scene_role == "proof":
+                return "Comparison elements animate with subtle emphasis"
+            if motion_intent.scene_role == "cta":
+                return "Call-to-action text fades and scales in"
+            if motion_intent.scene_role == "explanation":
+                return "Sequential diagram reveals with guided highlights"
+            if motion_intent.scene_role == "b_roll":
+                return "Layered motion with gentle foreground parallax"
         if "b-roll" in visual_lower:
             return "Ken Burns effect: slow zoom and pan over footage"
         elif "screen share" in visual_lower or "diagram" in visual_lower:
@@ -560,16 +639,483 @@ class ContentGenerationService:
         else:
             return "Smooth fade in/out with subtle motion"
 
-    def _default_transition(self, scene_number: int) -> str:
-        """Generate transition type based on scene position."""
-        if scene_number == 1:
-            return "Fade in from black"
-        elif scene_number % 4 == 0:
-            return "Hard cut for pacing change"
-        elif scene_number % 3 == 0:
-            return "Cross dissolve for smooth flow"
+    def _infer_motion_intent(
+        self,
+        scene_number: int,
+        total_scenes: int,
+        duration_seconds: int,
+        visual: str,
+        narration: str,
+        dialogue: str,
+        previous_motion_intent: MotionIntent | None = None,
+    ) -> MotionIntent:
+        """Infer a lightweight scene-level motion intent from the script scene."""
+        visual_lower = visual.lower()
+        narration_lower = narration.lower()
+        dialogue_lower = dialogue.lower()
+        combined = " ".join(part for part in (visual_lower, narration_lower, dialogue_lower) if part)
+        if scene_number == 1 or any(token in combined for token in ("opening", "intro", "hook", "start")):
+            intent = MotionIntent(
+                scene_role="hook",
+                primary_focus="host",
+                camera_pattern="zoom",
+                energy="high",
+                preferred_targets=["camera", "character", "text"],
+                motion_style="cinematic intro",
+                notes=["establish attention", "introduce the central subject"],
+            )
+        elif any(token in combined for token in ("cta", "subscribe", "end screen", "closing", "wrap", "final")) or scene_number == total_scenes:
+            intent = MotionIntent(
+                scene_role="cta",
+                primary_focus="text",
+                camera_pattern="pull_back",
+                energy="medium",
+                preferred_targets=["camera", "text", "character"],
+                motion_style="call to action",
+                notes=["close the loop", "make the ending feel complete"],
+            )
+        elif any(token in combined for token in ("comparison", "before/after", "after", "result", "proof", "dashboard", "metric")):
+            intent = MotionIntent(
+                scene_role="proof",
+                primary_focus="object",
+                camera_pattern="pan",
+                energy="high",
+                preferred_targets=["camera", "object", "text"],
+                motion_style="proof-driven reveal",
+                notes=["show contrast", "emphasize measurable change"],
+            )
+        elif any(token in combined for token in ("screen share", "diagram", "framework", "steps", "how to", "tutorial")):
+            intent = MotionIntent(
+                scene_role="explanation",
+                primary_focus="object",
+                camera_pattern="hold",
+                energy="low",
+                preferred_targets=["object", "text"],
+                motion_style="guided explainer",
+                notes=["prioritize readability", "keep motion subtle and clarifying"],
+            )
+        elif "b-roll" in combined or "footage" in combined or "example" in combined:
+            intent = MotionIntent(
+                scene_role="b_roll",
+                primary_focus="layer",
+                camera_pattern="pan",
+                energy="medium",
+                preferred_targets=["camera", "layer", "object"],
+                motion_style="ambient b-roll",
+                notes=["keep foreground motion light", "add depth with layered movement"],
+            )
         else:
+            intent = MotionIntent(
+                scene_role="general",
+                primary_focus="scene",
+                camera_pattern="hold",
+                energy="medium",
+                preferred_targets=["camera", "object"],
+                motion_style="balanced motion",
+                notes=["maintain continuity"],
+            )
+
+        if previous_motion_intent and intent.camera_pattern == previous_motion_intent.camera_pattern:
+            if intent.camera_pattern == "zoom":
+                intent.camera_pattern = "pan"
+            elif intent.camera_pattern == "pan":
+                intent.camera_pattern = "hold"
+            elif intent.camera_pattern == "hold":
+                intent.camera_pattern = "zoom"
+
+        if duration_seconds < 8:
+            intent.energy = "low" if intent.energy == "medium" else intent.energy
+
+        return intent
+
+    def _default_transition(
+        self,
+        scene_number: int,
+        motion_intent: MotionIntent | None = None,
+        next_motion_intent: MotionIntent | None = None,
+        previous_transition_type: str = "cut",
+    ) -> str:
+        """Generate a readable transition label for the scene plan."""
+        transition = self._default_transition_to_next(
+            scene_number=scene_number,
+            total_scenes=scene_number + (1 if next_motion_intent is not None else 0),
+            current_intent=motion_intent,
+            next_intent=next_motion_intent,
+            previous_transition_type=previous_transition_type,
+        )
+        if transition is None:
             return "Cut to next scene"
+        label = transition.type.replace("_", " ").title()
+        return label
+
+    def _default_transition_to_next(
+        self,
+        scene_number: int,
+        total_scenes: int,
+        current_intent: MotionIntent | None,
+        next_intent: MotionIntent | None,
+        previous_transition_type: str = "cut",
+    ) -> Transition | None:
+        """Infer a structured transition to the next scene."""
+        if next_intent is None or scene_number >= total_scenes:
+            return None
+
+        current_role = current_intent.scene_role if current_intent is not None else "general"
+        next_role = next_intent.scene_role
+
+        if current_role == "hook" and next_role in {"explanation", "proof"}:
+            transition = Transition(
+                type="crossfade",
+                duration=0.25,
+                parameters={"curve": "smooth"},
+            )
+        elif current_role == "explanation" and next_role == "explanation":
+            transition = Transition(type="cut", duration=0.0, parameters={})
+        elif current_role == "explanation" and next_role == "proof":
+            transition = Transition(
+                type="crossfade",
+                duration=0.25,
+                parameters={"curve": "soft"},
+            )
+        elif current_role == "proof" and next_role == "cta":
+            transition = Transition(
+                type="fade_to_black",
+                duration=0.5,
+                parameters={"target": "black"},
+            )
+        elif current_role == "proof":
+            slide_type = "slide_left" if scene_number % 2 == 0 else "slide_right"
+            transition = Transition(
+                type=slide_type,
+                duration=0.35,
+                parameters={"distance": 0.18},
+            )
+        elif next_role == "cta":
+            transition = Transition(
+                type="fade",
+                duration=0.25,
+                parameters={"from": "scene", "to": "cta"},
+            )
+        elif current_role == "comparison" or next_role == "comparison":
+            slide_type = "slide_up" if scene_number % 2 == 0 else "slide_down"
+            transition = Transition(
+                type=slide_type,
+                duration=0.35,
+                parameters={"distance": 0.15},
+            )
+        elif current_role == "b_roll" or next_role == "b_roll":
+            transition = Transition(
+                type="crossfade",
+                duration=0.2,
+                parameters={"curve": "dissolve"},
+            )
+        else:
+            transition = Transition(type="cut", duration=0.0, parameters={})
+
+        if previous_transition_type == transition.type and transition.type != "cut":
+            if transition.type in {"crossfade", "fade"}:
+                transition = Transition(type="cut", duration=0.0, parameters={})
+            elif transition.type == "fade_to_black":
+                transition = Transition(type="fade", duration=0.25, parameters={"from": "scene", "to": "scene"})
+            elif transition.type.startswith("slide_"):
+                alternate = "slide_right" if transition.type in {"slide_left", "slide_up"} else "slide_left"
+                transition = Transition(type=alternate, duration=transition.duration, parameters=dict(transition.parameters))
+
+        return transition
+
+    def _build_scene_motions(
+        self,
+        scene_number: int,
+        duration_seconds: int,
+        visual: str,
+        narration: str,
+        dialogue: str,
+        camera_direction: str,
+        animation_direction: str,
+        motion_intent: MotionIntent | None = None,
+        previous_motion_intent: MotionIntent | None = None,
+    ) -> list[Motion]:
+        """Create structured motions from scene intent and default directions."""
+        motions: list[Motion] = []
+        duration = max(0.5, float(duration_seconds))
+        camera_lower = camera_direction.lower()
+        animation_lower = animation_direction.lower()
+        visual_lower = visual.lower()
+        combined = " ".join(part for part in (visual_lower, narration.lower(), dialogue.lower()) if part)
+        intent = motion_intent or self._infer_motion_intent(
+            scene_number=scene_number,
+            total_scenes=scene_number,
+            duration_seconds=duration_seconds,
+            visual=visual,
+            narration=narration,
+            dialogue=dialogue,
+            previous_motion_intent=previous_motion_intent,
+        )
+
+        camera_start = 0.0
+        camera_duration = min(2.5, duration)
+        if intent.scene_role == "hook":
+            motions.append(
+                Motion(
+                    type="zoom",
+                    target="camera",
+                    start_time=camera_start,
+                    duration=camera_duration,
+                    easing="ease_in_out",
+                    parameters={"from": 1.0, "to": 1.14},
+                )
+            )
+            motions.append(
+                Motion(
+                    type="enter",
+                    target="character",
+                    start_time=0.2,
+                    duration=min(1.0, duration),
+                    easing="ease_out",
+                    parameters={"direction": "left"},
+                )
+            )
+        elif intent.scene_role == "cta":
+            motions.append(
+                Motion(
+                    type="exit",
+                    target="character",
+                    start_time=max(0.0, duration - min(1.0, duration)),
+                    duration=min(1.0, duration),
+                    easing="ease_in",
+                    parameters={"direction": "right"},
+                )
+            )
+            motions.append(
+                Motion(
+                    type="fade",
+                    target="text",
+                    start_time=max(0.0, duration - min(1.25, duration)),
+                    duration=min(1.25, duration),
+                    easing="ease_in_out",
+                    parameters={"from": 0.0, "to": 1.0},
+                )
+            )
+        elif intent.scene_role == "proof":
+            motions.append(
+                Motion(
+                    type="pan",
+                    target="camera",
+                    start_time=0.0,
+                    duration=camera_duration,
+                    easing="ease_in_out",
+                    parameters={"from": {"x": 0.0, "y": 0.0}, "to": {"x": 0.15, "y": 0.0}},
+                )
+            )
+            motions.append(
+                Motion(
+                    type="emphasize",
+                    target="scene",
+                    start_time=0.4,
+                    duration=min(1.5, duration),
+                    easing="ease_in_out",
+                    parameters={"strength": 0.25},
+                )
+            )
+        elif intent.scene_role == "explanation":
+            motions.append(
+                Motion(
+                    type="fade",
+                    target="text",
+                    start_time=0.2,
+                    duration=min(1.0, duration),
+                    easing="ease_in_out",
+                    parameters={"from": 0.0, "to": 1.0},
+                )
+            )
+            motions.append(
+                Motion(
+                    type="scale",
+                    target="object",
+                    start_time=0.25,
+                    duration=min(1.25, duration),
+                    easing="ease_out",
+                    parameters={"from": 0.95, "to": 1.05},
+                    label="diagram emphasis",
+                )
+            )
+        elif intent.scene_role == "b_roll":
+            motions.append(
+                Motion(
+                    type="pan",
+                    target="camera",
+                    start_time=0.0,
+                    duration=camera_duration,
+                    easing="linear",
+                    parameters={"from": {"x": 0.0, "y": 0.0}, "to": {"x": 0.08, "y": -0.02}},
+                )
+            )
+            motions.append(
+                Motion(
+                    type="move",
+                    target="object",
+                    start_time=0.4,
+                    duration=min(1.8, duration),
+                    easing="ease_in_out",
+                    parameters={"from": {"x": 0.2, "y": 0.65}, "to": {"x": 0.45, "y": 0.62}},
+                )
+            )
+        else:
+            motions.append(
+                Motion(
+                    type="zoom",
+                    target="camera",
+                    start_time=0.0,
+                    duration=camera_duration,
+                    easing="ease_in_out",
+                    parameters={"from": 1.0, "to": 1.08},
+                )
+            )
+
+        if any(token in combined for token in ("text overlay", "text", "lower-third", "subtitle", "caption", "graphics")):
+            motions.append(
+                Motion(
+                    type="fade",
+                    target="text",
+                    start_time=min(1.5, max(0.0, duration - 1.0)),
+                    duration=min(1.0, duration),
+                    easing="ease_in_out",
+                    parameters={"from": 0.0, "to": 1.0},
+                )
+            )
+            motions.append(
+                Motion(
+                    type="scale",
+                    target="text",
+                    start_time=min(1.5, max(0.0, duration - 1.0)),
+                    duration=min(1.0, duration),
+                    easing="ease_out",
+                    parameters={"from": 0.9, "to": 1.0},
+                )
+            )
+
+        if motion_intent is None:
+            if any(token in camera_lower for token in ("zoom in", "close-up", "zoom")):
+                motions.append(
+                    Motion(
+                        type="zoom",
+                        target="camera",
+                        start_time=0.0,
+                        duration=min(2.5, duration),
+                        easing="ease_in_out",
+                        parameters={"from": 1.0, "to": 1.12},
+                    )
+                )
+            if "pan" in camera_lower or "split-screen" in camera_lower:
+                motions.append(
+                    Motion(
+                        type="pan",
+                        target="camera",
+                        start_time=0.0,
+                        duration=min(2.5, duration),
+                        easing="ease_in_out",
+                        parameters={"from": {"x": 0.0, "y": 0.0}, "to": {"x": 0.15, "y": 0.0}},
+                    )
+                )
+            if "tilt" in camera_lower:
+                motions.append(
+                    Motion(
+                        type="pan",
+                        target="camera",
+                        start_time=0.0,
+                        duration=min(2.0, duration),
+                        easing="ease_in_out",
+                        parameters={"from": {"x": 0.0, "y": 0.0}, "to": {"x": 0.0, "y": -0.08}},
+                    )
+                )
+
+            if any(token in animation_lower for token in ("walk", "move", "stroll", "glide")):
+                motions.append(
+                    Motion(
+                        type="move",
+                        target="character",
+                        start_time=0.25,
+                        duration=min(1.5, duration),
+                        easing="ease_in_out",
+                        parameters={"from": {"x": 0.15, "y": 0.75}, "to": {"x": 0.5, "y": 0.75}},
+                    )
+                )
+            if any(token in animation_lower for token in ("fade in", "pop in", "enter", "appear")):
+                motions.append(
+                    Motion(
+                        type="enter",
+                        target="character",
+                        start_time=0.0,
+                        duration=min(0.75, duration),
+                        easing="ease_out",
+                        parameters={"direction": "left"},
+                    )
+                )
+            if any(token in animation_lower for token in ("fade out", "exit", "disappear")) or "end screen" in visual_lower:
+                motions.append(
+                    Motion(
+                        type="exit",
+                        target="character",
+                        start_time=max(0.0, duration - min(0.75, duration)),
+                        duration=min(0.75, duration),
+                        easing="ease_in",
+                        parameters={"direction": "right"},
+                    )
+                )
+        if "text" in visual_lower or "overlay" in visual_lower or "graphics" in visual_lower:
+            motions.append(
+                Motion(
+                    type="fade",
+                    target="text",
+                    start_time=min(1.5, max(0.0, duration - 1.0)),
+                    duration=min(1.0, duration),
+                    easing="ease_in_out",
+                    parameters={"from": 0.0, "to": 1.0},
+                )
+            )
+            motions.append(
+                Motion(
+                    type="scale",
+                    target="text",
+                    start_time=min(1.5, max(0.0, duration - 1.0)),
+                    duration=min(1.0, duration),
+                    easing="ease_out",
+                    parameters={"from": 0.9, "to": 1.0},
+                )
+            )
+        if motion_intent is None:
+            if "comparison" in visual_lower or "dashboard" in visual_lower:
+                motions.append(
+                    Motion(
+                        type="emphasize",
+                        target="scene",
+                        start_time=0.5,
+                        duration=min(1.5, duration),
+                        easing="ease_in_out",
+                        parameters={"strength": 0.2},
+                    )
+                )
+
+        unique_motions: list[Motion] = []
+        seen_keys: set[tuple[str, str, float, float, str]] = set()
+        for motion in motions:
+            motion.validate(scene_duration=duration, allow_overflow=True)
+            key = (
+                motion.type,
+                motion.target,
+                round(motion.start_time, 3),
+                round(motion.duration, 3),
+                repr(sorted(motion.parameters.items())),
+            )
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            unique_motions.append(motion)
+
+        for motion in unique_motions:
+            motion.validate(scene_duration=duration, allow_overflow=True)
+
+        return unique_motions
 
     def create_scene_asset_plan(self, video_production_plan: VideoProductionPlan) -> SceneAssetPlan:
         """Convert VideoProductionPlan scenes into deterministic asset requirements.
@@ -917,6 +1463,48 @@ class ContentGenerationService:
                 audio_parts.append(f"SFX: {scene.sound_effects}")
             audio_requirements = ". ".join(audio_parts) if audio_parts else "No audio"
             
+            motions = []
+            for motion in scene.motions:
+                target_id = motion.target_id
+                if not target_id and motion.target == "character" and character_ids:
+                    target_id = character_ids[0]
+                elif not target_id and motion.target == "object" and asset_ids:
+                    target_id = asset_ids[0]
+                motions.append(
+                    Motion(
+                        type=motion.type,
+                        target=motion.target,
+                        start_time=motion.start_time,
+                        duration=motion.duration,
+                        easing=motion.easing,
+                        parameters=dict(motion.parameters),
+                        target_id=target_id,
+                        label=motion.label,
+                    )
+                )
+
+            transition_to_next = None
+            if scene.transition_to_next is not None:
+                transition_to_next = Transition(
+                    type=scene.transition_to_next.type,
+                    duration=scene.transition_to_next.duration,
+                    parameters=dict(scene.transition_to_next.parameters),
+                )
+
+# Build a narration AudioRequest for the scene. Scenes without
+            # narration keep audio_request=None so renderer/assembly can
+            # preserve the existing silent behavior for those scenes.
+            audio_request = None
+            if scene.narration and scene.narration.strip():
+                audio_request = AudioRequest(
+                    scene_number=scene.scene_number,
+                    duration_seconds=scene.duration_seconds,
+                    narration_text=scene.narration,
+                    voice_reference="default",
+                    background_music_reference="",
+                    sound_effect_references=[],
+                    audio_format="wav",
+                )
             job = RenderJobSpec(
                 job_id=f"render-scene-{scene.scene_number}",
                 scene_number=scene.scene_number,
@@ -928,6 +1516,9 @@ class ContentGenerationService:
                 animation_instructions=scene.animation_direction,
                 camera_instructions=scene.camera_direction,
                 audio_requirements=audio_requirements,
+                motions=motions,
+                transition_to_next=transition_to_next,
+                audio_request=audio_request,
             )
             jobs.append(job)
             total_duration += scene.duration_seconds

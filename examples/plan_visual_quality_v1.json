@@ -1,0 +1,156 @@
+{
+  "title": "Why Studying Longer Doesn't Mean Learning More",
+  "description": "A visual explanation of why focused study beats marathon sessions.",
+  "tags": ["studying", "learning", "focus", "memory"],
+  "video_format": "shorts",
+  "privacy_status": "private",
+  "category_id": "27",
+  "scenes": [
+    {
+      "narration": "You study for six hours, but remember almost nothing.",
+      "caption": "6 hours. Almost nothing remembered.",
+      "visual": {
+        "scene_role": "hook",
+        "primary_focus": "character",
+        "energy": "high",
+        "environment": {"type": "study_desk", "background_color": [232, 221, 202], "ground_color": [122, 94, 66], "ground_y": 0.78, "accent_color": [255, 214, 120]},
+        "characters": [{"name": "student", "pose": "surprised", "emotion": "frustrated", "x": 0.42, "y": 0.76, "scale": 1.15}],
+        "objects": [{"name": "desk", "type": "desk", "x": 0.45, "y": 0.88, "scale": 1.3}, {"name": "books", "type": "stack_of_books", "x": 0.16, "y": 0.72}, {"name": "clock", "type": "clock", "x": 0.84, "y": 0.16}],
+        "text_elements": [{"text": "6 HOURS?", "size": "headline", "y": 0.12, "fade_in": 0.3}],
+        "camera_spec": {"pattern": "slow_zoom_in", "duration": 3.0, "easing": "ease_in_out"},
+        "motions": [{"target": "object", "object_name": "clock", "type": "move", "start_time": 0.2, "duration": 1.0, "easing": "ease_out", "parameters": {"from": {"x": 1.05, "y": 0.16}, "to": {"x": 0.84, "y": 0.16}}}],
+        "transition": {"type": "cut", "duration": 0.0}
+      }
+    },
+    {
+      "narration": "The problem is not effort. Your brain cannot store attention on demand.",
+      "caption": "Effort is not the same as attention",
+      "visual": {
+        "scene_role": "problem",
+        "primary_focus": "scene",
+        "environment": {"type": "abstract_info_space", "background_color": [26, 32, 48], "ground_color": [18, 22, 34], "ground_y": 0.8, "accent_color": [130, 190, 255]},
+        "characters": [{"name": "student", "pose": "talk", "emotion": "focused", "x": 0.28, "y": 0.74}],
+        "objects": [{"name": "brain", "type": "brain", "x": 0.7, "y": 0.38, "scale": 1.5}, {"name": "books", "type": "stack_of_books", "x": 0.3, "y": 0.9}],
+        "visual_effects": [{"type": "glow", "target": "brain", "start": 0.6, "duration": 2.0}],
+        "text_elements": [{"text": "MORE HOURS != MORE MEMORY", "size": "large", "y": 0.12, "fade_in": 0.4}],
+        "transition": {"type": "crossfade", "duration": 0.5}
+      }
+    },
+    {
+      "narration": "Think of learning as a curve: it rises, then attention begins to fall.",
+      "caption": "Learning rises, then attention falls",
+      "visual": {
+        "scene_role": "explanation",
+        "primary_focus": "object",
+        "environment": {"type": "abstract_info_space", "background_color": [24, 30, 44], "ground_color": [18, 22, 34], "ground_y": 0.82, "accent_color": [255, 170, 120]},
+        "objects": [{"name": "graph", "type": "graph", "x": 0.5, "y": 0.46, "scale": 2.2}, {"name": "clock", "type": "clock", "x": 0.85, "y": 0.15}],
+        "visual_effects": [{"type": "circle_highlight", "target": "graph", "start": 1.0, "duration": 1.5}],
+        "text_elements": [{"text": "THE FOCUS CLIFF", "size": "headline", "y": 0.12}],
+        "camera_spec": {"pattern": "focus_on_object", "focus_target": "graph", "duration": 3.0, "easing": "ease_in_out"},
+        "transition": {"type": "slide_left", "duration": 0.4}
+      }
+    },
+    {
+      "narration": "As fatigue builds, the student keeps moving, but the learning signal gets weaker.",
+      "caption": "Busy does not mean effective",
+      "visual": {
+        "scene_role": "character_action",
+        "primary_focus": "character",
+        "character_action": "walk",
+        "environment": {"type": "classroom", "background_color": [210, 220, 214], "ground_color": [90, 100, 92], "ground_y": 0.78, "accent_color": [245, 245, 230]},
+        "characters": [{"name": "student", "pose": "walk", "emotion": "frustrated", "x": 0.25, "y": 0.76, "scale": 1.1}],
+        "objects": [{"name": "books", "type": "stack_of_books", "x": 0.75, "y": 0.78}],
+        "text_elements": [{"text": "BUSY != EFFECTIVE", "size": "headline", "x": 0.33, "y": 0.16}],
+        "motions": [{"target": "character", "type": "move", "start_time": 0.2, "duration": 2.0, "easing": "ease_in_out", "parameters": {"from": {"x": 0.2, "y": 0.76}, "to": {"x": 0.7, "y": 0.76}}}],
+        "transition": {"type": "crossfade", "duration": 0.4}
+      }
+    },
+    {
+      "narration": "The fix starts with a smaller target: one idea, actively recalled.",
+      "caption": "Choose one idea to recall",
+      "visual": {
+        "scene_role": "object_interaction",
+        "primary_focus": "object",
+        "environment": {"type": "study_desk", "background_color": [220, 232, 235], "ground_color": [110, 80, 60], "ground_y": 0.8, "accent_color": [255, 220, 120]},
+        "characters": [{"name": "student", "pose": "point", "emotion": "focused", "x": 0.34, "y": 0.76}],
+        "objects": [{"name": "desk", "type": "desk", "x": 0.48, "y": 0.88, "scale": 1.2}, {"name": "notebook", "type": "notebook", "x": 0.62, "y": 0.68, "scale": 1.3}, {"name": "pen", "type": "pen", "x": 0.8, "y": 0.7}],
+        "text_elements": [{"text": "SINGLE-TASK FOCUS", "size": "headline", "y": 0.13, "fade_in": 0.4}],
+        "visual_effects": [{"type": "highlight", "target": "notebook", "start": 0.8, "duration": 1.5}],
+        "motions": [{"target": "object", "object_name": "pen", "type": "move", "start_time": 0.3, "duration": 1.0, "easing": "ease_out", "parameters": {"from": {"x": 0.95, "y": 0.7}, "to": {"x": 0.8, "y": 0.7}}}],
+        "transition": {"type": "slide_up", "duration": 0.4}
+      }
+    },
+    {
+      "narration": "Now the camera moves to the moment that matters: retrieval, not rereading.",
+      "caption": "Retrieval beats rereading",
+      "visual": {
+        "scene_role": "camera_focus",
+        "primary_focus": "object",
+        "environment": {"type": "workspace", "background_color": [42, 55, 62], "ground_color": [30, 36, 40], "ground_y": 0.82, "accent_color": [120, 220, 190]},
+        "characters": [{"name": "student", "pose": "talk", "emotion": "focused", "x": 0.25, "y": 0.76}],
+        "objects": [{"name": "screen", "type": "screen", "x": 0.68, "y": 0.42, "scale": 1.7}, {"name": "check", "type": "check_mark", "x": 0.68, "y": 0.42, "scale": 1.0}],
+        "text_elements": [{"text": "RECALL", "size": "headline", "y": 0.13, "color": [120, 255, 190], "fade_in": 0.5}],
+        "camera_spec": {"pattern": "focus_on_object", "focus_target": "screen", "duration": 2.8, "easing": "ease_in_out"},
+        "transition": {"type": "crossfade", "duration": 0.5}
+      }
+    },
+    {
+      "narration": "Compare two sessions: six foggy hours on the left, three focused blocks on the right.",
+      "caption": "6 foggy hours vs 3 focused blocks",
+      "visual": {
+        "scene_role": "comparison",
+        "primary_focus": "scene",
+        "environment": {"type": "abstract_info_space", "background_color": [30, 34, 42], "ground_color": [20, 22, 28], "ground_y": 0.84, "accent_color": [255, 210, 120]},
+        "characters": [{"name": "tired", "pose": "idle", "emotion": "sad", "x": 0.25, "y": 0.76, "scale": 0.9}, {"name": "focused", "pose": "point", "emotion": "happy", "x": 0.75, "y": 0.76, "scale": 1.1}],
+        "objects": [{"name": "fog", "type": "thought_bubble", "x": 0.25, "y": 0.38, "scale": 1.2}, {"name": "check", "type": "check_mark", "x": 0.75, "y": 0.38, "scale": 1.2}],
+        "text_elements": [{"text": "MARATHON", "x": 0.25, "y": 0.12, "size": "large", "color": [255, 130, 120]}, {"text": "FOCUSED BLOCKS", "x": 0.75, "y": 0.12, "size": "large", "color": [130, 255, 190]}],
+        "visual_effects": [{"type": "spotlight", "target": "focused", "start": 1.0, "duration": 1.5}],
+        "transition": {"type": "slide_right", "duration": 0.4}
+      }
+    },
+    {
+      "narration": "Use a short break, then return with a question that forces your brain to rebuild the idea.",
+      "caption": "Break. Return. Rebuild.",
+      "visual": {
+        "scene_role": "explanation",
+        "primary_focus": "character",
+        "environment": {"type": "bedroom", "background_color": [205, 215, 230], "ground_color": [95, 75, 70], "ground_y": 0.8, "accent_color": [255, 225, 150]},
+        "characters": [{"name": "student", "pose": "talk", "emotion": "focused", "x": 0.5, "y": 0.76}],
+        "objects": [{"name": "timer", "type": "timer", "x": 0.2, "y": 0.35, "scale": 1.1}, {"name": "brain", "type": "brain", "x": 0.8, "y": 0.35, "scale": 1.1}],
+        "text_elements": [{"text": "ASK A QUESTION", "size": "headline", "y": 0.13, "fade_in": 0.4}],
+        "visual_effects": [{"type": "pulse", "target": "brain", "start": 0.8, "duration": 1.6}],
+        "transition": {"type": "fade", "duration": 0.5}
+      }
+    },
+    {
+      "narration": "The transformation is simple: less time staring, more time retrieving and connecting.",
+      "caption": "Less staring. More retrieving.",
+      "visual": {
+        "scene_role": "transformation",
+        "primary_focus": "scene",
+        "environment": {"type": "workspace", "background_color": [34, 48, 54], "ground_color": [25, 32, 36], "ground_y": 0.82, "accent_color": [120, 230, 210]},
+        "characters": [{"name": "student", "pose": "walk", "emotion": "excited", "x": 0.25, "y": 0.76, "scale": 1.0}, {"name": "student_after", "pose": "jump", "emotion": "happy", "x": 0.75, "y": 0.76, "scale": 1.1}],
+        "objects": [{"name": "old", "type": "stack_of_books", "x": 0.22, "y": 0.62, "scale": 0.9}, {"name": "new", "type": "check_mark", "x": 0.77, "y": 0.45, "scale": 1.3}],
+        "text_elements": [{"text": "RETRIEVE > REREAD", "size": "headline", "y": 0.13, "fade_in": 0.4}],
+        "motions": [{"target": "character", "target_id": "student_after", "type": "enter", "start_time": 0.4, "duration": 0.8, "easing": "ease_out", "parameters": {"direction": "right"}}],
+        "camera_spec": {"pattern": "zoom_then_pan", "duration": 3.0, "easing": "ease_in_out"},
+        "transition": {"type": "crossfade", "duration": 0.5}
+      }
+    },
+    {
+      "narration": "So the goal is not to study forever. It is to make each focused block count.",
+      "caption": "Make each focused block count.",
+      "visual": {
+        "scene_role": "payoff",
+        "primary_focus": "character",
+        "environment": {"type": "study_desk", "background_color": [236, 226, 198], "ground_color": [120, 88, 62], "ground_y": 0.8, "accent_color": [255, 220, 120]},
+        "characters": [{"name": "student", "pose": "wave", "emotion": "happy", "x": 0.5, "y": 0.76, "scale": 1.2}],
+        "objects": [{"name": "notebook", "type": "notebook", "x": 0.22, "y": 0.7}, {"name": "check", "type": "check_mark", "x": 0.78, "y": 0.42, "scale": 1.5}],
+        "text_elements": [{"text": "FOCUS > HOURS", "size": "headline", "y": 0.14, "color": [80, 170, 100], "fade_in": 0.5}],
+        "visual_effects": [{"type": "glow", "target": "check", "start": 0.7, "duration": 1.8}],
+        "camera_spec": {"pattern": "slow_zoom_in", "duration": 3.0, "easing": "ease_in_out"},
+        "transition": {"type": "fade_to_black", "duration": 0.6}
+      }
+    }
+  ]
+}

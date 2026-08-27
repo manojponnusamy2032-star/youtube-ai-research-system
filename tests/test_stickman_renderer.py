@@ -245,6 +245,39 @@ def test_stickman_renderer_direct() -> None:
         assert output_path.stat().st_size > 1000
 
 
+def test_camera_instructions_affect_pose() -> None:
+    """Test that camera instructions change the generated pose transform."""
+    renderer = StickmanRenderer(execute_enabled=False)
+
+    static_pose = renderer._compute_pose(
+        action="walk",
+        t=1.0,
+        duration=2.0,
+        width=320,
+        height=240,
+        camera_instructions="Static shot",
+    )
+    zoom_pose = renderer._compute_pose(
+        action="walk",
+        t=1.0,
+        duration=2.0,
+        width=320,
+        height=240,
+        camera_instructions="Slow zoom in",
+    )
+    pan_pose = renderer._compute_pose(
+        action="walk",
+        t=0.25,
+        duration=2.0,
+        width=320,
+        height=240,
+        camera_instructions="Gentle pan right",
+    )
+
+    assert zoom_pose.camera_zoom > static_pose.camera_zoom
+    assert pan_pose.camera_pan_x != static_pose.camera_pan_x
+
+
 def test_stickman_renderer_not_available() -> None:
     """Test StickmanRenderer when FFmpeg is not available (mocked)."""
     # This test just verifies the class can be instantiated

@@ -47,6 +47,12 @@ class Config:
             "data/database/youtube.db",
         )
 
+        # Knowledge Brain / Obsidian vault
+        self.KNOWLEDGE_VAULT_PATH: str = os.getenv(
+            "KNOWLEDGE_VAULT_PATH",
+            "data/obsidian_vault",
+        )
+
         # Collection defaults
         self.DEFAULT_MAX_RESULTS: int = int(
             os.getenv("DEFAULT_MAX_RESULTS", "50")

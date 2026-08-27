@@ -33,6 +33,9 @@ from src.database.database_service import DatabaseService
 from src.models.workflow_report import WorkflowMetrics
 from src.services.analysis_service import AnalysisService, OllamaProvider
 from src.services.content_generation_service import ContentGenerationService
+from src.knowledge.config import KnowledgeConfig
+from src.knowledge.knowledge_service import KnowledgeService as ObsidianKnowledgeService
+from src.knowledge.retriever import KnowledgeRetriever
 from src.services.knowledge_service import KnowledgeService
 from src.services.pattern_service import PatternService
 from src.services.title_generation_service import TitleGenerationService
@@ -55,6 +58,7 @@ class APISettings(BaseModel):
     log_level: str = "INFO"
     api_key: str | None = None
     database_path: str = "data/database/youtube.db"
+    knowledge_vault_path: str = "data/obsidian_vault"
     youtube_api_key: str | None = None
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "llama3.2:latest"
@@ -75,6 +79,7 @@ class APISettings(BaseModel):
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             api_key=os.getenv("API_KEY"),
             database_path=os.getenv("DATABASE_PATH", "data/database/youtube.db"),
+            knowledge_vault_path=os.getenv("KNOWLEDGE_VAULT_PATH", "data/obsidian_vault"),
             youtube_api_key=os.getenv("YOUTUBE_API_KEY"),
             ollama_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
             ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2:latest"),
@@ -166,6 +171,8 @@ class APIContainer:
     youtube_service: YouTubeService | None
     pattern_service: PatternService
     knowledge_service: KnowledgeService
+    obsidian_knowledge_service: ObsidianKnowledgeService
+    knowledge_retriever: KnowledgeRetriever
     title_generation_service: TitleGenerationService
     content_generation_service: ContentGenerationService
     workflow_manager_agent: WorkflowManagerAgent
@@ -345,6 +352,10 @@ def get_container() -> APIContainer:
 
     pattern_service = PatternService(database_service)
     knowledge_service = KnowledgeService(database_service)
+    obsidian_knowledge_service = ObsidianKnowledgeService(
+        KnowledgeConfig(settings.knowledge_vault_path)
+    )
+    knowledge_retriever = KnowledgeRetriever(obsidian_knowledge_service.repository)
     title_generation_service = TitleGenerationService(database_service, knowledge_service, pattern_service)
     transcript_service = TranscriptService(database_service)
     analysis_service = AnalysisService(
@@ -366,9 +377,17 @@ def get_container() -> APIContainer:
         collector_agent = CollectorAgent(youtube_service, database_service)
 
     transcript_agent = TranscriptAgent(transcript_service, database_service)
-    analysis_agent = AnalysisAgent(analysis_service, database_service)
+    analysis_agent = AnalysisAgent(
+        analysis_service,
+        database_service,
+        knowledge_retriever=knowledge_retriever,
+    )
     pattern_extractor_agent = PatternExtractorAgent(pattern_service, database_service)
-    knowledge_base_agent = KnowledgeBaseAgent(database_service, knowledge_service)
+    knowledge_base_agent = KnowledgeBaseAgent(
+        database_service,
+        knowledge_service,
+        obsidian_knowledge_service=obsidian_knowledge_service,
+    )
     title_generator_agent = TitleGeneratorAgent(title_generation_service, database_service)
 
     hook_agent = HookGeneratorAgent(content_generation_service)
@@ -380,23 +399,36 @@ def get_container() -> APIContainer:
     from src.agents.render_output_manager import RenderOutputManager
     from src.agents.render_pipeline_orchestrator import RenderPipelineOrchestrator
     from src.services.final_media_orchestrator import FinalMediaOrchestrator
+    from src.services.stickman_renderer import StickmanRenderer
     from src.services.video_assembler import VideoAssembler
     from src.services.media_muxer import MediaMuxer
-    from src.services.tts_service import MockTTSService
+    from src.services.tts_service import MockTTSService, TTSService
     from src.services.tts_audio_renderer import TTSAudioRenderer
+    from src.services.system_speech_tts_service import SystemSpeechTTSService
 
-    tts_service = MockTTSService()
+    # Production narration: prefer a real local TTS provider (Windows
+    # System.Speech) and fall back to the deterministic mock only when
+    # the real provider is unavailable on this machine.
+    system_tts = SystemSpeechTTSService(output_directory="output/audio")
+    if system_tts.is_available():
+        tts_service: TTSService = system_tts
+    else:
+        tts_service = MockTTSService(output_directory="output/audio")
     tts_audio_renderer = TTSAudioRenderer(tts_service=tts_service)
+    stickman_renderer = StickmanRenderer(execute_enabled=True)
 
     final_media_orchestrator = FinalMediaOrchestrator(
-        video_assembler=VideoAssembler(),
+        video_assembler=VideoAssembler(execute_enabled=True),
         audio_renderer=tts_audio_renderer,
-        media_muxer=MediaMuxer(),
+        media_muxer=MediaMuxer(execute_enabled=True),
     )
 
     render_pipeline_orchestrator = RenderPipelineOrchestrator(
         render_job_manager=RenderJobManager(),
-        render_job_executor=RenderJobExecutor(audio_renderer=tts_audio_renderer),
+        render_job_executor=RenderJobExecutor(
+            renderer=stickman_renderer,
+            audio_renderer=tts_audio_renderer,
+        ),
         render_output_manager=RenderOutputManager(),
         final_media_orchestrator=final_media_orchestrator,
     )
@@ -426,6 +458,8 @@ def get_container() -> APIContainer:
         youtube_service=youtube_service,
         pattern_service=pattern_service,
         knowledge_service=knowledge_service,
+        obsidian_knowledge_service=obsidian_knowledge_service,
+        knowledge_retriever=knowledge_retriever,
         title_generation_service=title_generation_service,
         content_generation_service=content_generation_service,
         workflow_manager_agent=workflow_manager_agent,
@@ -556,6 +590,16 @@ def get_pattern_service() -> PatternService:
 def get_knowledge_service() -> KnowledgeService:
     """Provide knowledge service."""
     return get_container().knowledge_service
+
+
+def get_obsidian_knowledge_service() -> ObsidianKnowledgeService:
+    """Provide Obsidian knowledge service."""
+    return get_container().obsidian_knowledge_service
+
+
+def get_knowledge_retriever() -> KnowledgeRetriever:
+    """Provide knowledge retriever."""
+    return get_container().knowledge_retriever
 
 
 def get_title_generation_service() -> TitleGenerationService:

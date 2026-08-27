@@ -1,0 +1,72 @@
+{
+  "dataset": {
+    "videos": 1,
+    "analyses": 1
+  },
+  "hook_types": [
+    {
+      "pattern": "question",
+      "count": 1,
+      "percentage": 100.0,
+      "average_views": 100.0,
+      "average_likes": 10.0,
+      "average_comments": 1.0
+    }
+  ],
+  "emotions": [
+    {
+      "pattern": "excited",
+      "count": 1,
+      "percentage": 100.0,
+      "average_views": 100.0,
+      "average_likes": 10.0,
+      "average_comments": 1.0
+    }
+  ],
+  "story_structures": [
+    {
+      "pattern": "tutorial",
+      "count": 1,
+      "percentage": 100.0,
+      "average_views": 100.0,
+      "average_likes": 10.0,
+      "average_comments": 1.0
+    }
+  ],
+  "thumbnail_patterns": [
+    {
+      "pattern": "face+text",
+      "count": 1,
+      "percentage": 100.0,
+      "average_views": 100.0,
+      "average_likes": 10.0,
+      "average_comments": 1.0
+    }
+  ],
+  "title_formulas": [
+    {
+      "pattern": "how-to",
+      "count": 1,
+      "percentage": 100.0,
+      "average_views": 100.0,
+      "average_likes": 10.0,
+      "average_comments": 1.0
+    }
+  ],
+  "retention_techniques": [],
+  "recommendations": [
+    "Dominant hook types: 'question' appears in 100.0% of videos.",
+    "Dominant emotions: 'excited' appears in 100.0% of videos.",
+    "Dominant story structures: 'tutorial' appears in 100.0% of videos.",
+    "Dominant thumbnail patterns: 'face+text' appears in 100.0% of videos.",
+    "Dominant title formulas: 'how-to' appears in 100.0% of videos.",
+    "Dominant cta types: 'direct' appears in 100.0% of videos.",
+    "Dominant target audiences: 'beginners' appears in 100.0% of videos.",
+    "Dominant difficulty levels: 'beginner' appears in 100.0% of videos.",
+    "Dominant video styles: 'tutorial' appears in 100.0% of videos.",
+    "Dominant value propositions: 'learn' appears in 100.0% of videos.",
+    "Average confidence score is 0.80.",
+    "Analyzed 1 videos across 10 categories."
+  ],
+  "average_confidence": 0.8
+}

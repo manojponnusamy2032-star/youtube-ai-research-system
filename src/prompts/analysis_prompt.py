@@ -43,13 +43,16 @@ INSTRUCTIONS:
 JSON RESPONSE:"""
 
 
-def get_analysis_prompt(transcript: str, max_length: int = 8000) -> str:
+def get_analysis_prompt(transcript: str, max_length: int = 8000, knowledge_context: str | None = None) -> str:
     """
     Generate the analysis prompt for a given transcript.
     
     Args:
         transcript: Video transcript text to analyze
         max_length: Maximum transcript length to include (to avoid token limits)
+        knowledge_context: Optional prior knowledge context from the Knowledge Brain.
+            When provided, the LLM is instructed to use this prior knowledge
+            to inform its analysis while still basing conclusions on the transcript.
         
     Returns:
         Formatted prompt string
@@ -57,5 +60,21 @@ def get_analysis_prompt(transcript: str, max_length: int = 8000) -> str:
     # Truncate transcript if too long
     if len(transcript) > max_length:
         transcript = transcript[:max_length] + "...[truncated]"
-    
-    return ANALYSIS_PROMPT.format(transcript=transcript)
+
+    prompt = ANALYSIS_PROMPT.format(transcript=transcript)
+
+    if knowledge_context:
+        # Inject prior knowledge context before the JSON response instruction
+        knowledge_block = f"""
+PRIOR KNOWLEDGE FROM KNOWLEDGE BRAIN:
+The following is prior knowledge retrieved from the system's knowledge vault.
+Use it to inform your analysis, but do NOT treat it as the source of truth for this transcript.
+If prior knowledge conflicts with what you observe in the transcript, note the conflict explicitly.
+
+{knowledge_context}
+
+"""
+        # Insert before "JSON RESPONSE:"
+        prompt = prompt.replace("JSON RESPONSE:", knowledge_block + "JSON RESPONSE:")
+
+    return prompt
