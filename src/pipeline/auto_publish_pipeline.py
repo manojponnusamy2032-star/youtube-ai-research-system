@@ -440,6 +440,7 @@ class AutoPublishPipeline:
                     video_format=video_format,
                     stickman_renderer=stickman_renderer,
                     semantic_context=semantic_contexts[index] if semantic_contexts else None,
+                    total_scenes=len(plan.scenes),
                 )
             else:
                 # Use SceneVideoRenderer for backward-compatible caption-only scenes
@@ -470,6 +471,9 @@ class AutoPublishPipeline:
                 # V1.5: safe planning application actually ran and modified
                 # staging inputs for at least one scene.
                 stage_result["visual_planning_application"] = True
+        if any("background_variation" in record for record in render_outputs):
+            # V1.6-A: background variation ran for at least one scene.
+            stage_result["background_variation"] = True
         return stage_result
 
     @staticmethod
@@ -671,6 +675,7 @@ class AutoPublishPipeline:
         video_format: VideoFormat,
         stickman_renderer: StickmanRenderer,
         semantic_context: dict[str, Any] | None = None,
+        total_scenes: int = 0,
     ) -> dict[str, Any]:
         """Render a scene with visual intent using StickmanRenderer."""
         from src.models.content_package import AudioRequest, RenderConfig, RenderJobSpec
@@ -703,6 +708,9 @@ class AutoPublishPipeline:
         motions = visual.motions.copy()
         # V1.5: per-scene application decision (set only when the V1.5 layer runs).
         vpa_decision = None
+        # V1.6-A: per-scene background variation decision (set only when the
+        # V1.6 layer runs).
+        bgv_decision = None
         if semantic_context and semantic_context.get("motion_result"):
             motions.extend(semantic_context["motion_result"].motions)
         structured_visual = (
@@ -808,6 +816,28 @@ class AutoPublishPipeline:
                         visual_description = applied_desc
                         visual_description["visual_planning_application"] = vpa_decision.to_dict()
 
+            # V1.6-A: deterministic background/environment variation. Scenes
+            # without explicit environment intent stop falling back to the
+            # identical outdoor default backdrop, and adjacent scenes never
+            # share one. Gated by its own feature flag and independent of the
+            # V1.3 semantic pipeline and the V1.4/V1.5 planning stack; explicit
+            # environment intent is never overwritten.
+            import src.services.background_variation as bgv_mod
+
+            if bgv_mod.VISUAL_BACKGROUND_VARIATION_ENABLED:
+                bgv_total = (
+                    int(total_scenes)
+                    if int(total_scenes) > 0
+                    else max(int(scene_number), 1)
+                )
+                staged_desc, bgv_decision = bgv_mod.apply_background_variation(
+                    visual_description,
+                    scene_index=max(int(scene_number) - 1, 0),
+                    total_scenes=bgv_total,
+                )
+                visual_description = staged_desc
+                visual_description["background_variation"] = bgv_decision.to_dict()
+
         # Create RenderJobSpec
         job_spec = RenderJobSpec(
             job_id=f"scene_{scene_number:03d}",
@@ -839,6 +869,10 @@ class AutoPublishPipeline:
                 # V1.5: per-scene application decision surfaces on the render
                 # record for pipeline-level observability and validation.
                 record["visual_planning_application"] = vpa_decision.to_dict()
+            if bgv_decision is not None:
+                # V1.6-A: per-scene background variation decision surfaces on
+                # the render record for pipeline-level observability.
+                record["background_variation"] = bgv_decision.to_dict()
         return record
 
     @staticmethod
