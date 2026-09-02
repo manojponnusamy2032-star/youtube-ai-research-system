@@ -8,6 +8,7 @@ quota.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -474,6 +475,9 @@ class AutoPublishPipeline:
         if any("background_variation" in record for record in render_outputs):
             # V1.6-A: background variation ran for at least one scene.
             stage_result["background_variation"] = True
+        if any("character_variation" in record for record in render_outputs):
+            # V1.6-B: character variation ran for at least one scene.
+            stage_result["character_variation"] = True
         return stage_result
 
     @staticmethod
@@ -776,12 +780,56 @@ class AutoPublishPipeline:
 
         # Structured visual description consumed by StickmanRenderer.
         visual_description: dict[str, Any] | None = None
+        char_variation_decision = None
         if structured_visual:
+            # V1.6-B: deterministic character staging/pose variation. Varies
+            # only character intent fields that were NOT explicitly authored
+            # (pose/scale/x key absent) and runs BEFORE V1.2 presentation
+            # staging so clamping, framing, and object clearance remain
+            # authoritative. Gated by its own feature flag; reads V1.4 focus
+            # decisions additively; never mutates planner results or the
+            # scene's VisualScene (a shallow copy receives the variation).
+            import src.services.character_variation as char_var_mod
+
+            if char_var_mod.VISUAL_CHARACTER_VARIATION_ENABLED:
+                variation_focus = None
+                if semantic_context:
+                    planning_meta = semantic_context.get("visual_planning") or {}
+                    attention_meta = planning_meta.get("attention") or {}
+                    camera_meta = planning_meta.get("camera") or {}
+                    variation_focus = (
+                        attention_meta.get("primary_target")
+                        or camera_meta.get("focus_target")
+                        or None
+                    )
+                varied_characters, char_variation_decision = (
+                    char_var_mod.apply_character_variation(
+                        list(getattr(visual, "characters", []) or []),
+                        list(getattr(visual, "objects", []) or []),
+                        scene_index=max(int(scene_number) - 1, 0),
+                        total_scenes=(
+                            total_scenes
+                            if int(total_scenes) > 0
+                            else max(int(scene_number), 1)
+                        ),
+                        scene_role=str(getattr(visual, "scene_role", "") or "general"),
+                        primary_focus=str(getattr(visual, "primary_focus", "") or "scene"),
+                        focus_target=variation_focus,
+                    )
+                )
+                if char_variation_decision.changed:
+                    varied_visual = copy.copy(visual)
+                    varied_visual.characters = varied_characters
+                    visual = varied_visual
             visual_description = self._stage_structured_visual(
                 visual,
                 duration,
                 transition_to_next,
             )
+            if char_variation_decision is not None:
+                # V1.6-B: per-scene decision also surfaces on the staging
+                # description for validation and observability.
+                visual_description["character_variation"] = char_variation_decision.to_dict()
             if semantic_context:
                 motion_result = semantic_context.get("motion_result")
                 visual_description["semantics"] = {
@@ -873,6 +921,10 @@ class AutoPublishPipeline:
                 # V1.6-A: per-scene background variation decision surfaces on
                 # the render record for pipeline-level observability.
                 record["background_variation"] = bgv_decision.to_dict()
+            if char_variation_decision is not None:
+                # V1.6-B: per-scene character variation decision surfaces on
+                # the render record for pipeline-level observability.
+                record["character_variation"] = char_variation_decision.to_dict()
         return record
 
     @staticmethod
