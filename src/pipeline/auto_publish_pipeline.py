@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
 
 SCENE_PADDING_SECONDS = 0.4
 SEMANTIC_VISUALS_ENABLED = False
+# V1.4-F: sequence-level visual planning (story/diversity/composition/camera/
+# attention). Advisory only; requires the V1.3 semantic pipeline and never
+# overrides explicit scene intent.
+VISUAL_STORY_PLANNER_ENABLED = False
 
 
 @dataclass
@@ -323,6 +327,7 @@ class AutoPublishPipeline:
         scenes = self._render_scenes(plan, narration["segments"])
         if scenes["status"] == "failed":
             return scenes
+        visual_planning_ran = bool(scenes.get("visual_planning"))
 
         assembled = self._assemble(scenes["render_outputs"], plan.format)
         if assembled["status"] == "failed":
@@ -355,6 +360,8 @@ class AutoPublishPipeline:
             ),
             "scene_count": len(plan.scenes),
         }
+        if visual_planning_ran:
+            result["visual_planning"] = True
 
         if upload:
             result["upload"] = self._upload(plan, final_path)
@@ -395,7 +402,23 @@ class AutoPublishPipeline:
 
         # Initialize stickman renderer for visual scenes
         stickman_renderer = StickmanRenderer(execute_enabled=True)
-        semantic_contexts = self._semantic_contexts(plan) if SEMANTIC_VISUALS_ENABLED else []
+        semantic_contexts: list[dict[str, Any]] = []
+        planning_ran = False
+        if SEMANTIC_VISUALS_ENABLED:
+            # Beat and focus detection runs exactly once per planning phase
+            # and is shared by the V1.3 semantic lowering and the V1.4
+            # planning stack (V1.4-F, feature-flagged).
+            beats = self._beat_inputs(plan)
+            focus_results = self._focus_results(plan, beats)
+            semantic_contexts = self._semantic_contexts(
+                plan, beats=beats, focus_results=focus_results
+            )
+            if VISUAL_STORY_PLANNER_ENABLED:
+                planning = self._plan_visual_story(
+                    plan, beats=beats, focus_results=focus_results
+                )
+                self._merge_visual_planning(semantic_contexts, planning)
+                planning_ran = True
 
         for index, (scene, segment) in enumerate(zip(plan.scenes, segments)):
             scene_number = segment["scene_number"]
@@ -437,15 +460,24 @@ class AutoPublishPipeline:
                     "details": record,
                 }
             render_outputs.append(record)
-        return {"status": "completed", "render_outputs": render_outputs}
+        stage_result: dict[str, Any] = {
+            "status": "completed",
+            "render_outputs": render_outputs,
+        }
+        if planning_ran:
+            stage_result["visual_planning"] = True
+            if any("visual_planning_application" in record for record in render_outputs):
+                # V1.5: safe planning application actually ran and modified
+                # staging inputs for at least one scene.
+                stage_result["visual_planning_application"] = True
+        return stage_result
 
     @staticmethod
-    def _semantic_contexts(plan: VideoPlan) -> list[dict[str, Any]]:
-        """Build optional derived semantics without changing scene models."""
+    def _beat_inputs(plan: VideoPlan) -> list[Any]:
+        """Detect narrative beats once per run for V1.3/V1.4 reuse (V1.4-F)."""
         from src.services.visual_beat_engine import VisualBeatEngine
-        from src.services.visual_focus import VisualFocusResolver
 
-        beats = VisualBeatEngine().detect_sequence(
+        return VisualBeatEngine().detect_sequence(
             [
                 {
                     "narration": scene.narration,
@@ -454,13 +486,17 @@ class AutoPublishPipeline:
                 for scene in plan.scenes
             ]
         )
-        focus_resolver = VisualFocusResolver()
-        motion_lowerer = SemanticMotionLowerer()
-        transition_resolver = SemanticTransitionResolver()
-        contexts: list[dict[str, Any]] = []
+
+    @staticmethod
+    def _focus_results(plan: VideoPlan, beats: list[Any]) -> dict[int, Any]:
+        """Resolve per-scene focus once per run (scene index -> VisualFocus)."""
+        from src.services.visual_focus import VisualFocusResolver
+
+        resolver = VisualFocusResolver()
+        results: dict[int, Any] = {}
         for index, (scene, beat) in enumerate(zip(plan.scenes, beats)):
             visual = scene.visual or VisualScene()
-            focus = focus_resolver.resolve(
+            results[index] = resolver.resolve(
                 beat,
                 characters=visual.characters,
                 objects=visual.objects,
@@ -468,6 +504,30 @@ class AutoPublishPipeline:
                 primary_focus=visual.primary_focus,
                 focus_target=visual.camera_spec.get("focus_target"),
             )
+        return results
+
+    @staticmethod
+    def _semantic_contexts(
+        plan: VideoPlan,
+        beats: list[Any] | None = None,
+        focus_results: dict[int, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Build optional derived semantics without changing scene models.
+
+        ``beats`` and ``focus_results`` may be supplied by callers that already
+        computed them (V1.4-F) so beat detection and focus resolution run
+        exactly once per planning phase.
+        """
+        if beats is None:
+            beats = AutoPublishPipeline._beat_inputs(plan)
+        if focus_results is None:
+            focus_results = AutoPublishPipeline._focus_results(plan, beats)
+        motion_lowerer = SemanticMotionLowerer()
+        transition_resolver = SemanticTransitionResolver()
+        contexts: list[dict[str, Any]] = []
+        for index, (scene, beat) in enumerate(zip(plan.scenes, beats)):
+            visual = scene.visual or VisualScene()
+            focus = focus_results[index]
             subject = focus.emphasis_target or focus.primary or beat.subject
             intent = {
                 "HOOK": "reveal",
@@ -498,6 +558,109 @@ class AutoPublishPipeline:
                 "transition": next_transition,
             })
         return contexts
+
+    @staticmethod
+    def _plan_visual_story(
+        plan: VideoPlan,
+        *,
+        beats: list[Any],
+        focus_results: dict[int, Any],
+    ) -> dict[str, Any]:
+        """Run the V1.4-A..E planning stack once per planning phase.
+
+        Advisory only: every planner is read-only and never mutates scenes,
+        and explicit scene intent (motions, camera, transitions) always
+        outranks recommendations -- that precedence is encoded inside each
+        planner, so nothing here replaces an existing decision. Beat and
+        focus results are consumed, never recomputed.
+
+        Planner services are imported lazily (mirroring the existing
+        _semantic_contexts convention) because they import ScenePlan from
+        this module; module-level imports would create an import cycle.
+        """
+        from src.services.attention_planner import AttentionPlanner
+        from src.services.camera_planner import CameraPlanner
+        from src.services.composition_planner import CompositionPlanner
+        from src.services.visual_diversity import VisualDiversityPolicy
+        from src.services.visual_story_planner import VisualStoryPlanner
+
+        scenes = list(plan.scenes or [])
+        focus_list = [focus_results.get(index) for index in range(len(scenes))]
+        story_plan = VisualStoryPlanner().plan(scenes, beats=beats, focuses=focus_list)
+        diversity_report = VisualDiversityPolicy().analyze(scenes, story_plan=story_plan)
+        composition_plan = CompositionPlanner().plan(
+            scenes, story_plan=story_plan, diversity_report=diversity_report
+        )
+        camera_plan = CameraPlanner().plan(
+            scenes,
+            story_plan=story_plan,
+            diversity_report=diversity_report,
+            composition_plan=composition_plan,
+        )
+        attention_plan = AttentionPlanner().plan(
+            scenes,
+            story_plan=story_plan,
+            diversity_report=diversity_report,
+            composition_plan=composition_plan,
+            camera_plan=camera_plan,
+            focus_results=focus_results,
+        )
+        return {
+            "story_plan": story_plan,
+            "diversity_report": diversity_report,
+            "composition_plan": composition_plan,
+            "camera_plan": camera_plan,
+            "attention_plan": attention_plan,
+        }
+
+    @staticmethod
+    def _decision_maps(
+        planning: dict[str, Any],
+    ) -> dict[str, dict[int, dict[str, Any]]]:
+        """Convert each plan's per-scene decisions into index -> dict maps."""
+        def by_index(plan_obj: Any) -> dict[int, dict[str, Any]]:
+            mapped: dict[int, dict[str, Any]] = {}
+            for decision in getattr(plan_obj, "decisions", ()) or ():
+                to_dict = getattr(decision, "to_dict", None)
+                mapped[decision.scene_index] = (
+                    to_dict() if callable(to_dict) else asdict(decision)
+                )
+            return mapped
+
+        return {
+            "story": by_index(planning["story_plan"]),
+            "diversity": by_index(planning["diversity_report"]),
+            "composition": by_index(planning["composition_plan"]),
+            "camera": by_index(planning["camera_plan"]),
+            "attention": by_index(planning["attention_plan"]),
+        }
+
+    @staticmethod
+    def _merge_visual_planning(
+        semantic_contexts: list[dict[str, Any]],
+        planning: dict[str, Any],
+    ) -> None:
+        """Attach V1.4 planning metadata to semantic contexts additively.
+
+        Only a new ``visual_planning`` key is added. Existing V1.3 semantic
+        keys (beat, focus, motion_result, transition) are never replaced, and
+        recommendations are recorded as advisory metadata -- never applied
+        over explicit scene intent.
+        """
+        maps = AutoPublishPipeline._decision_maps(planning)
+        for index, context in enumerate(semantic_contexts):
+            story = maps["story"].get(index, {})
+            context["visual_planning"] = {
+                "scene_index": index,
+                "treatment": story.get("treatment"),
+                "recommended_motions": list(story.get("preferred_motion_types") or ()),
+                "recommended_camera": story.get("camera_pattern"),
+                "recommended_transition": story.get("transition_type"),
+                "diversity": maps["diversity"].get(index),
+                "composition": maps["composition"].get(index),
+                "camera": maps["camera"].get(index),
+                "attention": maps["attention"].get(index),
+            }
 
     def _render_visual_scene(
         self,
@@ -538,6 +701,8 @@ class AutoPublishPipeline:
         # Structured scene fields are the canonical path. Only use legacy text-based
         # motion fallbacks when no structured composition is present.
         motions = visual.motions.copy()
+        # V1.5: per-scene application decision (set only when the V1.5 layer runs).
+        vpa_decision = None
         if semantic_context and semantic_context.get("motion_result"):
             motions.extend(semantic_context["motion_result"].motions)
         structured_visual = (
@@ -621,6 +786,27 @@ class AutoPublishPipeline:
 
                 qa_report = VisualQAService().check_composition(visual_description, scene=f"scene_{scene_number:03d}")
                 visual_description["qa_report"] = qa_report.to_dict()
+                if semantic_context.get("visual_planning"):
+                    # V1.4-F: advisory planning metadata reaches staging
+                    # additively; explicit scene intent is never replaced.
+                    visual_description["visual_planning"] = semantic_context["visual_planning"]
+                    # V1.5: apply safe V1.4 recommendations to staging inputs
+                    # (camera pattern/focus_target, composition metadata) before
+                    # RenderJobSpec construction. Gated by the V1.5 flag AND by
+                    # the presence of V1.4 planning metadata, so it never runs
+                    # when V1.4 is disabled. Explicit scene intent always wins.
+                    import src.services.visual_planning_application as vpa_mod
+
+                    if vpa_mod.VISUAL_PLANNING_APPLICATION_ENABLED:
+                        applied_desc, vpa_decision = vpa_mod.apply_visual_planning(
+                            visual_description,
+                            semantic_context["visual_planning"],
+                            scene_index=int(
+                                semantic_context["visual_planning"].get("scene_index") or 0
+                            ),
+                        )
+                        visual_description = applied_desc
+                        visual_description["visual_planning_application"] = vpa_decision.to_dict()
 
         # Create RenderJobSpec
         job_spec = RenderJobSpec(
@@ -649,6 +835,10 @@ class AutoPublishPipeline:
             if "transition_to_next" not in record and job_spec.transition_to_next is not None:
                 transition = job_spec.transition_to_next
                 record["transition_to_next"] = transition.to_dict() if hasattr(transition, "to_dict") else dict(transition)
+            if vpa_decision is not None:
+                # V1.5: per-scene application decision surfaces on the render
+                # record for pipeline-level observability and validation.
+                record["visual_planning_application"] = vpa_decision.to_dict()
         return record
 
     @staticmethod
