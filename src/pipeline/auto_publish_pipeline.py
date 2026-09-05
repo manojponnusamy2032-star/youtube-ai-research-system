@@ -421,6 +421,10 @@ class AutoPublishPipeline:
                 self._merge_visual_planning(semantic_contexts, planning)
                 planning_ran = True
 
+        # V1.6-D: the previous scene's executed camera is threaded across
+        # scenes so camera execution can avoid jarring direction jumps where
+        # no explicit/planning camera decision exists.
+        previous_camera: dict[str, Any] | None = None
         for index, (scene, segment) in enumerate(zip(plan.scenes, segments)):
             scene_number = segment["scene_number"]
             duration = segment["duration_seconds"] + SCENE_PADDING_SECONDS
@@ -442,6 +446,7 @@ class AutoPublishPipeline:
                     stickman_renderer=stickman_renderer,
                     semantic_context=semantic_contexts[index] if semantic_contexts else None,
                     total_scenes=len(plan.scenes),
+                    previous_camera=previous_camera,
                 )
             else:
                 # Use SceneVideoRenderer for backward-compatible caption-only scenes
@@ -462,6 +467,13 @@ class AutoPublishPipeline:
                     "details": record,
                 }
             render_outputs.append(record)
+            # V1.6-D: remember the executed camera so the next scene can avoid
+            # a jarring direction reversal in the fallback path.
+            camera_execution_meta = record.get("camera_execution")
+            if isinstance(camera_execution_meta, dict):
+                executed_pattern = str(camera_execution_meta.get("pattern") or "")
+                if executed_pattern:
+                    previous_camera = {"pattern": executed_pattern}
         stage_result: dict[str, Any] = {
             "status": "completed",
             "render_outputs": render_outputs,
@@ -478,6 +490,12 @@ class AutoPublishPipeline:
         if any("character_variation" in record for record in render_outputs):
             # V1.6-B: character variation ran for at least one scene.
             stage_result["character_variation"] = True
+        if any("motion_variation" in record for record in render_outputs):
+            # V1.6-C: motion variation ran for at least one scene.
+            stage_result["motion_variation"] = True
+        if any("camera_execution" in record for record in render_outputs):
+            # V1.6-D: camera execution ran for at least one scene.
+            stage_result["camera_execution"] = True
         return stage_result
 
     @staticmethod
@@ -680,6 +698,7 @@ class AutoPublishPipeline:
         stickman_renderer: StickmanRenderer,
         semantic_context: dict[str, Any] | None = None,
         total_scenes: int = 0,
+        previous_camera: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Render a scene with visual intent using StickmanRenderer."""
         from src.models.content_package import AudioRequest, RenderConfig, RenderJobSpec
@@ -715,6 +734,12 @@ class AutoPublishPipeline:
         # V1.6-A: per-scene background variation decision (set only when the
         # V1.6 layer runs).
         bgv_decision = None
+        # V1.6-C: per-scene motion variation decision (set only when the
+        # V1.6-C layer runs).
+        motion_variation_decision = None
+        # V1.6-D: per-scene camera execution decision (set only when the
+        # V1.6-D layer runs).
+        camera_execution_decision = None
         if semantic_context and semantic_context.get("motion_result"):
             motions.extend(semantic_context["motion_result"].motions)
         structured_visual = (
@@ -886,6 +911,64 @@ class AutoPublishPipeline:
                 visual_description = staged_desc
                 visual_description["background_variation"] = bgv_decision.to_dict()
 
+            # V1.6-C: deterministic scene-aware motion variation. Explicit
+            # structured motions, V1.4/V1.5-derived motions, and legacy
+            # character actions remain authoritative; this layer only adds a
+            # safe primitive when the selected target has no explicit motion.
+            import src.services.motion_variation as motion_var_mod
+
+            if motion_var_mod.VISUAL_MOTION_VARIATION_ENABLED:
+                variation_focus = None
+                if semantic_context:
+                    planning_meta = semantic_context.get("visual_planning") or {}
+                    attention_meta = planning_meta.get("attention") or {}
+                    camera_meta = planning_meta.get("camera") or {}
+                    variation_focus = (
+                        attention_meta.get("primary_target")
+                        or camera_meta.get("focus_target")
+                        or None
+                    )
+                motion_result = motion_var_mod.apply_motion_variation(
+                    list(getattr(visual, "characters", []) or []),
+                    list(getattr(visual, "objects", []) or []),
+                    motions,
+                    scene_index=max(int(scene_number) - 1, 0),
+                    scene_role=str(getattr(visual, "scene_role", "") or "general"),
+                    primary_focus=str(getattr(visual, "primary_focus", "") or "scene"),
+                    focus_target=variation_focus,
+                    duration=duration,
+                    explicit_character_action=str(getattr(visual, "character_action", "idle") or "idle"),
+                )
+                motions = list(motion_result.motions)
+                motion_variation_decision = motion_result.decision
+                visual_description["motion_variation"] = motion_variation_decision.to_dict()
+
+            # V1.6-D: camera execution. Translates camera intent and decisions
+            # (explicit camera_spec, V1.4 camera decision / V1.4-A story camera
+            # recommendation, V1.4-E attention target) into an executable
+            # camera spec the renderer already executes. Gated by its own
+            # feature flag; explicit camera motions/specs are deferred to the
+            # renderer unchanged; invalid or unresolvable instructions safely
+            # fall back to static framing. Planner decisions remain
+            # authoritative and are never rewritten.
+            import src.services.camera_execution as cam_exec_mod
+
+            if cam_exec_mod.VISUAL_CAMERA_EXECUTION_ENABLED and visual_description is not None:
+                planning_meta = None
+                if semantic_context:
+                    planning_meta = semantic_context.get("visual_planning")
+                staged_desc, cam_exec_decision = cam_exec_mod.apply_camera_execution(
+                    visual_description,
+                    scene_index=max(int(scene_number) - 1, 0),
+                    scene_role=str(getattr(visual, "scene_role", "") or "general"),
+                    duration=duration,
+                    planning_metadata=planning_meta,
+                    previous_camera=previous_camera,
+                    camera_motions=motions,
+                )
+                visual_description = staged_desc
+                camera_execution_decision = cam_exec_decision
+
         # Create RenderJobSpec
         job_spec = RenderJobSpec(
             job_id=f"scene_{scene_number:03d}",
@@ -925,6 +1008,14 @@ class AutoPublishPipeline:
                 # V1.6-B: per-scene character variation decision surfaces on
                 # the render record for pipeline-level observability.
                 record["character_variation"] = char_variation_decision.to_dict()
+            if motion_variation_decision is not None:
+                # V1.6-C: per-scene motion variation decision surfaces on the
+                # render record for pipeline-level observability.
+                record["motion_variation"] = motion_variation_decision.to_dict()
+            if camera_execution_decision is not None:
+                # V1.6-D: per-scene camera execution decision surfaces on the
+                # render record for pipeline-level observability.
+                record["camera_execution"] = camera_execution_decision.to_dict()
         return record
 
     @staticmethod
