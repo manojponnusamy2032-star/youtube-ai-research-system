@@ -425,6 +425,15 @@ class AutoPublishPipeline:
         # scenes so camera execution can avoid jarring direction jumps where
         # no explicit/planning camera decision exists.
         previous_camera: dict[str, Any] | None = None
+        # V1.6-E: the previous scene's cast is threaded across scenes so
+        # entrances are scheduled only for elements genuinely new to the
+        # stage (deterministic cast-delta detection).
+        import src.services.scene_choreography as choreo_mod
+
+        choreo_enabled = bool(choreo_mod.VISUAL_CHOREOGRAPHY_ENABLED)
+        # An empty previous cast for scene 1 is a deliberate cold open: the
+        # video starts here, so first-scene characters genuinely enter.
+        previous_cast: frozenset[tuple[str, str]] = frozenset()
         for index, (scene, segment) in enumerate(zip(plan.scenes, segments)):
             scene_number = segment["scene_number"]
             duration = segment["duration_seconds"] + SCENE_PADDING_SECONDS
@@ -433,6 +442,14 @@ class AutoPublishPipeline:
             # Update visual scene with duration for motion validation
             if scene.visual:
                 scene.visual.duration_seconds = duration
+
+            # V1.6-E: the next scene's cast (when that scene has visual
+            # intent) drives departure detection for non-cut transitions.
+            next_cast: frozenset[tuple[str, str]] | None = None
+            if choreo_enabled and index + 1 < len(plan.scenes):
+                next_visual = plan.scenes[index + 1].visual
+                if next_visual is not None:
+                    next_cast = choreo_mod.collect_cast_names(next_visual)
 
             # Determine rendering path: visual or caption-only
             if scene.visual and scene.visual.has_visual_intent():
@@ -447,6 +464,8 @@ class AutoPublishPipeline:
                     semantic_context=semantic_contexts[index] if semantic_contexts else None,
                     total_scenes=len(plan.scenes),
                     previous_camera=previous_camera,
+                    previous_cast=previous_cast,
+                    next_cast=next_cast,
                 )
             else:
                 # Use SceneVideoRenderer for backward-compatible caption-only scenes
@@ -474,6 +493,14 @@ class AutoPublishPipeline:
                 executed_pattern = str(camera_execution_meta.get("pattern") or "")
                 if executed_pattern:
                     previous_camera = {"pattern": executed_pattern}
+            # V1.6-E: remember this scene's cast so the next scene can detect
+            # genuine introductions.
+            if choreo_enabled:
+                previous_cast = (
+                    choreo_mod.collect_cast_names(scene.visual)
+                    if scene.visual is not None
+                    else frozenset()
+                )
         stage_result: dict[str, Any] = {
             "status": "completed",
             "render_outputs": render_outputs,
@@ -496,6 +523,9 @@ class AutoPublishPipeline:
         if any("camera_execution" in record for record in render_outputs):
             # V1.6-D: camera execution ran for at least one scene.
             stage_result["camera_execution"] = True
+        if any("choreography" in record for record in render_outputs):
+            # V1.6-E: scene choreography ran for at least one scene.
+            stage_result["choreography"] = True
         return stage_result
 
     @staticmethod
@@ -699,6 +729,8 @@ class AutoPublishPipeline:
         semantic_context: dict[str, Any] | None = None,
         total_scenes: int = 0,
         previous_camera: dict[str, Any] | None = None,
+        previous_cast: frozenset[tuple[str, str]] | None = None,
+        next_cast: frozenset[tuple[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Render a scene with visual intent using StickmanRenderer."""
         from src.models.content_package import AudioRequest, RenderConfig, RenderJobSpec
@@ -740,6 +772,9 @@ class AutoPublishPipeline:
         # V1.6-D: per-scene camera execution decision (set only when the
         # V1.6-D layer runs).
         camera_execution_decision = None
+        # V1.6-E: per-scene choreography decision (set only when the
+        # V1.6-E layer runs).
+        choreography_decision = None
         if semantic_context and semantic_context.get("motion_result"):
             motions.extend(semantic_context["motion_result"].motions)
         structured_visual = (
@@ -969,6 +1004,44 @@ class AutoPublishPipeline:
                 visual_description = staged_desc
                 camera_execution_decision = cam_exec_decision
 
+            # V1.6-E: scene choreography. Coordinates cast-delta entrances,
+            # non-cut exits, attention-aware emphasis, and transition-aware
+            # settling onto the existing motion list. Strictly append-only:
+            # existing motions are never mutated, retimed, or reordered, the
+            # V1.6-D camera spec (``visual_description["camera"]``) is read
+            # only, and all V1.6-A/B/C/D metadata is preserved. Gated by its
+            # own feature flag; invalid or conflicting inputs safely skip the
+            # affected action with a recorded warning instead of raising.
+            import src.services.scene_choreography as choreo_mod
+
+            if choreo_mod.VISUAL_CHOREOGRAPHY_ENABLED:
+                choreo_planning = None
+                if semantic_context:
+                    choreo_planning = semantic_context.get("visual_planning")
+                choreo_camera = (
+                    visual_description.get("camera")
+                    if isinstance(visual_description, dict)
+                    else None
+                )
+                choreo_result = choreo_mod.apply_scene_choreography(
+                    motions,
+                    visual_description=visual_description,
+                    previous_cast=previous_cast,
+                    next_cast=next_cast,
+                    scene_index=max(int(scene_number) - 1, 0),
+                    scene_role=str(getattr(visual, "scene_role", "") or "general"),
+                    duration=duration,
+                    planning_metadata=choreo_planning,
+                    camera=choreo_camera,
+                    transition_to_next=transition_to_next,
+                )
+                motions = list(choreo_result.motions)
+                choreography_decision = choreo_result.decision
+                # V1.6-E: per-scene decision also surfaces on the staging
+                # description for validation and observability (the service
+                # itself is pure and never mutates the description).
+                visual_description["choreography"] = choreography_decision.to_dict()
+
         # Create RenderJobSpec
         job_spec = RenderJobSpec(
             job_id=f"scene_{scene_number:03d}",
@@ -1016,6 +1089,10 @@ class AutoPublishPipeline:
                 # V1.6-D: per-scene camera execution decision surfaces on the
                 # render record for pipeline-level observability.
                 record["camera_execution"] = camera_execution_decision.to_dict()
+            if choreography_decision is not None:
+                # V1.6-E: per-scene choreography decision surfaces on the
+                # render record for pipeline-level observability.
+                record["choreography"] = choreography_decision.to_dict()
         return record
 
     @staticmethod
