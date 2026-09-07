@@ -526,6 +526,9 @@ class AutoPublishPipeline:
         if any("choreography" in record for record in render_outputs):
             # V1.6-E: scene choreography ran for at least one scene.
             stage_result["choreography"] = True
+        if any("emotion_execution" in record for record in render_outputs):
+            # V1.6-F: emotion execution ran for at least one scene.
+            stage_result["emotion_execution"] = True
         return stage_result
 
     @staticmethod
@@ -775,6 +778,9 @@ class AutoPublishPipeline:
         # V1.6-E: per-scene choreography decision (set only when the
         # V1.6-E layer runs).
         choreography_decision = None
+        # V1.6-F: per-scene emotion execution decision (set only when the
+        # V1.6-F layer runs).
+        emotion_execution_decision = None
         if semantic_context and semantic_context.get("motion_result"):
             motions.extend(semantic_context["motion_result"].motions)
         structured_visual = (
@@ -1042,6 +1048,46 @@ class AutoPublishPipeline:
                 # itself is pure and never mutates the description).
                 visual_description["choreography"] = choreography_decision.to_dict()
 
+            # V1.6-F: character emotion execution. Stages a deterministic
+            # ``emotion`` on the single character the scene is emotionally
+            # about (the V1.4-E attention primary target when it is a
+            # character present in the scene), derived from planner-
+            # authoritative semantics: V1.4 treatment -> V1.3 beat type ->
+            # scene role -> neutral. Explicitly authored ``emotion`` values
+            # are preserved untouched; no alternation is forced between
+            # consecutive scenes (semantic correctness over variety). The
+            # staged key flows through ``CharacterSpec(**character_dict)``
+            # into the renderer's existing tint/posture systems with zero
+            # renderer change. Gated by its own feature flag; malformed or
+            # missing inputs safely skip with a warning instead of raising.
+            import src.services.emotion_execution as emotion_mod
+
+            if emotion_mod.VISUAL_EMOTION_EXECUTION_ENABLED and visual_description is not None:
+                emotion_planning = None
+                if semantic_context:
+                    emotion_planning = semantic_context.get("visual_planning")
+                emotion_beat = None
+                semantics = visual_description.get("semantics")
+                if isinstance(semantics, dict):
+                    beat_dict = semantics.get("beat")
+                    emotion_beat = beat_dict if isinstance(beat_dict, dict) else None
+                emotion_result = emotion_mod.apply_emotion_execution(
+                    list(visual_description.get("characters") or []),
+                    scene_index=max(int(scene_number) - 1, 0),
+                    scene_role=str(getattr(visual, "scene_role", "") or "general"),
+                    planning_metadata=emotion_planning,
+                    beat=emotion_beat,
+                )
+                visual_description["characters"] = list(emotion_result.characters)
+                emotion_execution_decision = emotion_result.decision
+                # Metadata surfaces only when an emotion was actually staged
+                # (explicit-preservation and skip outcomes are silent no-ops
+                # so the metadata never misleads).
+                if emotion_execution_decision.changed:
+                    visual_description["emotion_execution"] = (
+                        emotion_execution_decision.to_dict()
+                    )
+
         # Create RenderJobSpec
         job_spec = RenderJobSpec(
             job_id=f"scene_{scene_number:03d}",
@@ -1093,6 +1139,10 @@ class AutoPublishPipeline:
                 # V1.6-E: per-scene choreography decision surfaces on the
                 # render record for pipeline-level observability.
                 record["choreography"] = choreography_decision.to_dict()
+            if emotion_execution_decision is not None:
+                # V1.6-F: per-scene emotion execution decision surfaces on the
+                # render record for pipeline-level observability.
+                record["emotion_execution"] = emotion_execution_decision.to_dict()
         return record
 
     @staticmethod
