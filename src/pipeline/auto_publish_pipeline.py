@@ -425,6 +425,9 @@ class AutoPublishPipeline:
         # scenes so camera execution can avoid jarring direction jumps where
         # no explicit/planning camera decision exists.
         previous_camera: dict[str, Any] | None = None
+        # V1.6-G: the previous scenes' executed camera patterns are threaded
+        # across scenes so camera diversity can avoid excessive repetition.
+        previous_camera_patterns: list[str] = []
         # V1.6-E: the previous scene's cast is threaded across scenes so
         # entrances are scheduled only for elements genuinely new to the
         # stage (deterministic cast-delta detection).
@@ -466,6 +469,7 @@ class AutoPublishPipeline:
                     previous_camera=previous_camera,
                     previous_cast=previous_cast,
                     next_cast=next_cast,
+                    previous_camera_patterns=tuple(previous_camera_patterns),
                 )
             else:
                 # Use SceneVideoRenderer for backward-compatible caption-only scenes
@@ -498,9 +502,23 @@ class AutoPublishPipeline:
             if choreo_enabled:
                 previous_cast = (
                     choreo_mod.collect_cast_names(scene.visual)
-                    if scene.visual is not None
+                    if scene.visual
                     else frozenset()
                 )
+            # V1.6-G: remember this scene's executed camera pattern so the next
+            # scene can avoid excessive repetition.
+            camera_diversity_meta = record.get("camera_diversity")
+            if isinstance(camera_diversity_meta, dict):
+                executed_pattern = str(camera_diversity_meta.get("pattern") or "")
+            else:
+                camera_execution_meta = record.get("camera_execution")
+                executed_pattern = (
+                    str(camera_execution_meta.get("pattern") or "")
+                    if isinstance(camera_execution_meta, dict)
+                    else ""
+                )
+            if executed_pattern:
+                previous_camera_patterns.append(executed_pattern)
         stage_result: dict[str, Any] = {
             "status": "completed",
             "render_outputs": render_outputs,
@@ -529,7 +547,38 @@ class AutoPublishPipeline:
         if any("emotion_execution" in record for record in render_outputs):
             # V1.6-F: emotion execution ran for at least one scene.
             stage_result["emotion_execution"] = True
+        if any("camera_diversity" in record for record in render_outputs):
+            # V1.6-G: camera diversity ran for at least one scene.
+            stage_result["camera_diversity"] = True
         return stage_result
+
+    @staticmethod
+    def _sanitize_planning_camera_focus(planning_metadata: Any) -> Any:
+        """G4: strip placeholder camera focus_target values from planning metadata.
+
+        V1.4-D can emit ``focus_target: "character"`` (a placeholder) when no real
+        character target resolves. If V1.6-E reads this via its camera-focus path,
+        it would manufacture a fake ``("character", "character")`` target. This
+        helper returns a shallow-sanitized copy where such placeholders are
+        cleared, so downstream choreography never invents a non-existent cast
+        member. Non-camera planning metadata is returned unchanged.
+        """
+        if not isinstance(planning_metadata, dict):
+            return planning_metadata
+        camera = planning_metadata.get("camera")
+        if not isinstance(camera, dict):
+            return planning_metadata
+        focus = str(camera.get("focus_target") or "").strip().lower()
+        if focus not in ("", "character", "object", "scene"):
+            return planning_metadata
+        pattern = str(camera.get("recommended_pattern") or "").strip().lower()
+        if pattern not in ("focus_on_character", "focus_on_object"):
+            return planning_metadata
+        sanitized_camera = dict(camera)
+        sanitized_camera["focus_target"] = ""
+        sanitized_planning = dict(planning_metadata)
+        sanitized_planning["camera"] = sanitized_camera
+        return sanitized_planning
 
     @staticmethod
     def _beat_inputs(plan: VideoPlan) -> list[Any]:
@@ -734,6 +783,7 @@ class AutoPublishPipeline:
         previous_camera: dict[str, Any] | None = None,
         previous_cast: frozenset[tuple[str, str]] | None = None,
         next_cast: frozenset[tuple[str, str]] | None = None,
+        previous_camera_patterns: tuple[str, ...] = (),
     ) -> dict[str, Any]:
         """Render a scene with visual intent using StickmanRenderer."""
         from src.models.content_package import AudioRequest, RenderConfig, RenderJobSpec
@@ -1023,7 +1073,10 @@ class AutoPublishPipeline:
             if choreo_mod.VISUAL_CHOREOGRAPHY_ENABLED:
                 choreo_planning = None
                 if semantic_context:
-                    choreo_planning = semantic_context.get("visual_planning")
+                    raw_planning = semantic_context.get("visual_planning")
+                    # G4: strip placeholder camera focus_target values so
+                    # choreography never invents a fake character target.
+                    choreo_planning = self._sanitize_planning_camera_focus(raw_planning)
                 choreo_camera = (
                     visual_description.get("camera")
                     if isinstance(visual_description, dict)
@@ -1088,6 +1141,44 @@ class AutoPublishPipeline:
                         emotion_execution_decision.to_dict()
                     )
 
+            # V1.6-G: camera diversity + attention-target safety. Operates
+            # strictly AFTER V1.6-D camera execution and V1.6-F emotion so the
+            # camera spec V1.6-D produced is the camera spec that V1.6-G
+            # refines. G4 sanitizes placeholder focus_target values (e.g.
+            # ``"character"``/``""``) so no downstream code can ever interpret a
+            # placeholder as a real cast member; G1 deterministically reduces
+            # excessive repetition of the same camera pattern within the
+            # sequence when semantically valid alternatives exist; G3 surfaces
+            # advisory activity metadata only. Existing authored camera intent
+            # and the V1.6-D camera spec are never overwritten when G4 has
+            # nothing to sanitize. Gated by its own feature flag.
+            import src.services.camera_diversity as camera_div_mod
+
+            if (
+                camera_div_mod.VISUAL_CAMERA_DIVERSITY_ENABLED
+                and visual_description is not None
+            ):
+                diversity_result = camera_div_mod.apply_camera_diversity(
+                    visual_description,
+                    scene_index=max(int(scene_number) - 1, 0),
+                    scene_role=str(getattr(visual, "scene_role", "") or "general"),
+                    cast=[
+                        str(getattr(member, "name", member.get("name", "") or ""))
+                        for member in (getattr(visual, "characters", []) or [])
+                        if (not isinstance(member, dict) or member.get("name"))
+                    ]
+                    + [
+                        str(getattr(member, "name", member.get("name", "") or ""))
+                        for member in (getattr(visual, "objects", []) or [])
+                        if (not isinstance(member, dict) or member.get("name"))
+                    ],
+                    previous_camera_patterns=previous_camera_patterns,
+                )
+                visual_description = diversity_result.visual_description
+                camera_diversity_decision = diversity_result.decision
+            else:
+                camera_diversity_decision = None
+
         # Create RenderJobSpec
         job_spec = RenderJobSpec(
             job_id=f"scene_{scene_number:03d}",
@@ -1143,6 +1234,10 @@ class AutoPublishPipeline:
                 # V1.6-F: per-scene emotion execution decision surfaces on the
                 # render record for pipeline-level observability.
                 record["emotion_execution"] = emotion_execution_decision.to_dict()
+            if camera_diversity_decision is not None:
+                # V1.6-G: per-scene camera diversity decision surfaces on the
+                # render record for pipeline-level observability.
+                record["camera_diversity"] = camera_diversity_decision.to_dict()
         return record
 
     @staticmethod

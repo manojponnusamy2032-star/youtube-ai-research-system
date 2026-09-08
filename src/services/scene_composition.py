@@ -62,6 +62,14 @@ EMOTION_TINTS: dict[str, tuple[int, int, int]] = {
 
 SAFE_MARGIN_RATIO = 0.08  # 8% inset on each side for mobile-safe text
 
+# V1.6-G (G2): deterministic widening of the camera pan / zoom-then-pan
+# interpolation ranges so a rendered pan_* movement is observably visible.
+# The previous hardcoded values (+/-0.06*width) travelled ~+/-6 px at 720p,
+# which was imperceptible. These ratios are bounded by the safe-area clamp in
+# ``_apply_camera_pattern`` and keep the pan centre within 20% of frame.
+PAN_RANGE_RATIO = 0.15           # +/-0.15 * width  (~288 px @1080p)
+ZOOM_THEN_PAN_RANGE_RATIO = 0.08  # +/-0.08 * width  (~192 px @1080p)
+
 
 def resolve_text_placement(
     nx: float,

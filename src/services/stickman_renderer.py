@@ -23,7 +23,9 @@ from src.agents.render_job_executor import RenderRequest
 from src.models.content_package import Motion, RenderConfig, RenderJobSpec
 from src.services.ffmpeg_renderer import FFmpegRenderer
 from src.services.scene_composition import (
+    PAN_RANGE_RATIO,
     SAFE_MARGIN_RATIO,
+    ZOOM_THEN_PAN_RANGE_RATIO,
     SceneComposition,
     resolve_text_placement,
 )
@@ -1938,13 +1940,21 @@ class StickmanRenderer:
         elif pattern == "slow_zoom_out":
             state["camera_zoom"] = interpolate_value(1.18, 1.0, eased)
         elif pattern == "pan_left":
-            state["camera_pan_x"] = int(interpolate_value(0.06, -0.06, eased) * width)
+            state["camera_pan_x"] = int(
+                interpolate_value(PAN_RANGE_RATIO, -PAN_RANGE_RATIO, eased) * width
+            )
         elif pattern == "pan_right":
-            state["camera_pan_x"] = int(interpolate_value(-0.06, 0.06, eased) * width)
+            state["camera_pan_x"] = int(
+                interpolate_value(-PAN_RANGE_RATIO, PAN_RANGE_RATIO, eased) * width
+            )
         elif pattern == "pan_up":
-            state["camera_pan_y"] = int(interpolate_value(0.04, -0.04, eased) * height)
+            state["camera_pan_y"] = int(
+                interpolate_value(PAN_RANGE_RATIO, -PAN_RANGE_RATIO, eased) * height
+            )
         elif pattern == "pan_down":
-            state["camera_pan_y"] = int(interpolate_value(-0.04, 0.04, eased) * height)
+            state["camera_pan_y"] = int(
+                interpolate_value(-PAN_RANGE_RATIO, PAN_RANGE_RATIO, eased) * height
+            )
         elif pattern == "zoom_then_pan":
             half = 0.5
             if p <= half:
@@ -1953,7 +1963,9 @@ class StickmanRenderer:
             else:
                 p_eased = apply_easing((p - half) / half, easing)
                 state["camera_zoom"] = 1.12
-                state["camera_pan_x"] = int(interpolate_value(0.0, 0.05, p_eased) * width)
+                state["camera_pan_x"] = int(
+                    interpolate_value(0.0, ZOOM_THEN_PAN_RANGE_RATIO, p_eased) * width
+                )
         elif pattern in ("focus_on_character", "focus_on_object"):
             target = _target_pos()
             end_zoom = 1.35

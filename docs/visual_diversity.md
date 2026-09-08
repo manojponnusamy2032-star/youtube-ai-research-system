@@ -136,4 +136,3 @@ When ready for integration:
 ## Important Note
 
 **V1.4-B does NOT modify rendering behavior yet.** It is an advisory-only analysis layer that produces reports. Any changes to actual rendering require explicit integration work.
-
