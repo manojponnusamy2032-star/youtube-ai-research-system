@@ -1,0 +1,1873 @@
+{
+  "job_id": "job_001",
+  "topic": "Smoke test",
+  "niche": "",
+  "audience": "general",
+  "status": "running",
+  "current_stage": "visual_plan",
+  "created_at": "2026-09-10T20:20:37.739229Z",
+  "updated_at": "2026-09-10T20:20:37.739250Z",
+  "completed_at": null,
+  "error": null,
+  "stages": {
+    "research": {
+      "stage": "research",
+      "status": "succeeded",
+      "started_at": "2026-09-10T20:20:37.758219Z",
+      "finished_at": "2026-09-10T20:20:37.763538Z",
+      "error": null,
+      "artifact_path": "D:\\youtube-ai-research-system\\youtube-ai-research-system\\test_output\\job_001\\research.json"
+    },
+    "strategy": {
+      "stage": "strategy",
+      "status": "succeeded",
+      "started_at": "2026-09-10T20:20:37.765989Z",
+      "finished_at": "2026-09-10T20:20:37.771048Z",
+      "error": null,
+      "artifact_path": "D:\\youtube-ai-research-system\\youtube-ai-research-system\\test_output\\job_001\\strategy.json"
+    },
+    "script": {
+      "stage": "script",
+      "status": "succeeded",
+      "started_at": "2026-09-10T20:20:37.776595Z",
+      "finished_at": "2026-09-10T20:20:37.781490Z",
+      "error": null,
+      "artifact_path": "D:\\youtube-ai-research-system\\youtube-ai-research-system\\test_output\\job_001\\script.json"
+    },
+    "visual_plan": {
+      "stage": "visual_plan",
+      "status": "succeeded",
+      "started_at": "2026-09-10T20:20:37.784331Z",
+      "finished_at": "2026-09-10T20:20:37.800189Z",
+      "error": null,
+      "artifact_path": "D:\\youtube-ai-research-system\\youtube-ai-research-system\\test_output\\job_001\\visual_plan.json"
+    },
+    "render": {
+      "stage": "render",
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null,
+      "error": null,
+      "artifact_path": null
+    },
+    "qc": {
+      "stage": "qc",
+      "status": "pending",
+      "started_at": null,
+      "finished_at": null,
+      "error": null,
+      "artifact_path": null
+    }
+  },
+  "research": {
+    "topic": "Smoke test",
+    "summary": "Smoke test. Research on skill acquisition shows that most people quit a new skill within the first few weeks, usually right before the first visible breakthrough. The pattern repeats across music, languages, coding and fitness because expectations, not talent, drive the decision to stop.",
+    "key_facts": [
+      "Most skill progress is non-linear: long flat plateaus precede sudden jumps.",
+      "Beginners typically overestimate the speed of early progress.",
+      "The 'valley of despair' is a well-documented phase in the Dunning-Kruger curve.",
+      "Consistency beats intensity for long-term skill retention.",
+      "Deliberate practice with feedback outperforms passive repetition."
+    ],
+    "pain_points": [
+      "Feeling slow at the start despite high motivation.",
+      "Comparing week-1 output to experts' polished results.",
+      "Not seeing measurable progress for weeks.",
+      "Believing a 'talent gene' determines success."
+    ],
+    "sub_topics": [
+      "The learning curve and its plateaus",
+      "How expectations shape persistence",
+      "Deliberate practice vs. mindless repetition",
+      "Building systems that survive low motivation"
+    ],
+    "sources": [
+      "mock://skills-research/learning-curves",
+      "mock://skills-research/plateau-studies",
+      "mock://skills-research/deliberate-practice"
+    ],
+    "target_audience": "general",
+    "confidence": 0.85,
+    "pattern_report": {},
+    "knowledge_base": [],
+    "videos_collected": 0,
+    "trend_info": null
+  },
+  "strategy": {
+    "topic": "Smoke test",
+    "angle": "People do not quit because they lack talent; they quit because their expectations do not match the real shape of the learning curve.",
+    "narrative_outline": [
+      "Open on the common story: excited start, then the quit.",
+      "Reveal the non-linear learning curve and the frustration plateau.",
+      "Explain deliberate practice and why it feels slow on purpose.",
+      "Swap motivation for a repeatable daily system.",
+      "Close with the compounding breakthrough and a next-step call to action."
+    ],
+    "key_messages": [
+      "Progress is non-linear: plateaus come before breakthroughs.",
+      "Early expectations are the real enemy, not ability.",
+      "Deliberate practice with feedback beats volume.",
+      "Systems carry you on low-motivation days."
+    ],
+    "emotional_triggers": [
+      "relief",
+      "hope",
+      "curiosity"
+    ],
+    "hook_idea": "Most people quit a new skill right before the moment it would have started working.",
+    "call_to_action": "Commit to one focused 25-minute session today.",
+    "target_audience": "general",
+    "confidence": 0.8,
+    "best_title": {},
+    "hook": {},
+    "generated_titles": [],
+    "pattern_report": {},
+    "knowledge_base": []
+  },
+  "script": {
+    "topic": "Smoke test",
+    "title": "Why Most People Quit Learning a Skill Too Early",
+    "hook": "Most people quit a new skill right before the moment it would have started working. The first weeks feel slow, so the beginner assumes progress is broken.",
+    "sections": [
+      {
+        "heading": "The 100-Hour Myth",
+        "narration": "Most people quit a new skill right before the moment it would have started working. The first weeks feel slow, so the beginner assumes progress is broken.",
+        "duration_seconds": 11
+      },
+      {
+        "heading": "The Frustration Plateau",
+        "narration": "Skill growth is not a straight line. It is a staircase of long flat plateaus followed by sudden jumps. Quitters leave during the plateau, just before the jump.",
+        "duration_seconds": 12
+      },
+      {
+        "heading": "Expectations vs Reality",
+        "narration": "Beginners overestimate early speed and underestimate later speed. When reality does not match the fantasy, the brain looks for a reason to stop.",
+        "duration_seconds": 10
+      },
+      {
+        "heading": "Deliberate Practice Feels Slow",
+        "narration": "Real practice means focused reps with feedback, and it feels boring on purpose. Mindless repetition feels productive but changes nothing.",
+        "duration_seconds": 8
+      },
+      {
+        "heading": "Build a System, Not Motivation",
+        "narration": "Systems carry you on the days motivation disappears. One focused 25-minute session beats a heroic three-hour session you will not repeat.",
+        "duration_seconds": 9
+      },
+      {
+        "heading": "The Breakthrough Is Closer Than You Think",
+        "narration": "Keep the session small, keep the feedback loop tight, and let the plateau do its work. The breakthrough comes from the reps you did not want to do.",
+        "duration_seconds": 12
+      }
+    ],
+    "call_to_action": "Commit to one focused 25-minute session today.",
+    "total_duration_seconds": 62,
+    "intro": "",
+    "section_payloads": [],
+    "scene_payloads": [],
+    "estimated_duration_minutes": 0
+  },
+  "visual_plan": {
+    "topic": "Smoke test",
+    "title": "Why Most People Quit Learning a Skill Too Early",
+    "job_id": null,
+    "scenes": [
+      {
+        "scene_number": 1,
+        "duration_seconds": 11,
+        "narration": "Most people quit a new skill right before the moment it would have started working. The first weeks feel slow, so the beginner assumes progress is broken.",
+        "render_type": "stickman_animation",
+        "visual_prompt": "A stickman scene about: The 100-Hour Myth",
+        "animation_instructions": "talk; text overlay: The 100-Hour Myth",
+        "camera_instructions": "slow zoom in",
+        "audio_requirements": "narration",
+        "character_action": "talk",
+        "motions": [
+          {
+            "type": "enter",
+            "target": "character",
+            "start_time": 0.0,
+            "duration": 0.8,
+            "easing": "ease_out",
+            "parameters": {
+              "from": {
+                "x": -0.2,
+                "y": 0.0
+              },
+              "to": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          },
+          {
+            "type": "fade",
+            "target": "text",
+            "start_time": 1.2,
+            "duration": 0.6,
+            "easing": "ease_in_out",
+            "parameters": {
+              "from": 1.0,
+              "to": 0.0
+            }
+          }
+        ],
+        "transition_to_next": {
+          "type": "cut",
+          "duration": 0.0,
+          "parameters": {}
+        },
+        "audio_request": {
+          "scene_number": 1,
+          "duration_seconds": 11,
+          "narration_text": "Most people quit a new skill right before the moment it would have started working. The first weeks feel slow, so the beginner assumes progress is broken.",
+          "voice_reference": "default",
+          "background_music_reference": "",
+          "sound_effect_references": [],
+          "audio_format": "aac"
+        },
+        "visual_description": {
+          "environment": {
+            "type": "study_desk",
+            "background_color": [
+              20,
+              26,
+              34
+            ],
+            "ground_color": [
+              45,
+              52,
+              62
+            ],
+            "ground_y": 0.8,
+            "accent_color": [
+              255,
+              200,
+              90
+            ]
+          },
+          "characters": [
+            {
+              "name": "learner",
+              "pose": "talk",
+              "emotion": "focused",
+              "x": 0.5,
+              "y": 0.78,
+              "scale": 1.0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "visible": true
+            }
+          ],
+          "objects": [
+            {
+              "name": "prop_clock",
+              "type": "clock",
+              "x": 0.82,
+              "y": 0.55,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "visible": true,
+              "color": [
+                255,
+                200,
+                90
+              ]
+            }
+          ],
+          "text_elements": [
+            {
+              "text": "The 100-Hour Myth",
+              "x": 0.5,
+              "y": 0.2,
+              "size": "large",
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "opacity": 1.0,
+              "style": "bold",
+              "anchor": "center",
+              "max_width": 0.8,
+              "fade_in": 0.4,
+              "fade_out": 0.0,
+              "appear_at": 0.0,
+              "duration": 0.0
+            }
+          ],
+          "effects": [],
+          "camera": {
+            "pattern": "slow_zoom_in",
+            "focus_target": null,
+            "start_state": {},
+            "end_state": {},
+            "duration": 0.0,
+            "easing": "ease_in_out"
+          }
+        }
+      },
+      {
+        "scene_number": 2,
+        "duration_seconds": 12,
+        "narration": "Skill growth is not a straight line. It is a staircase of long flat plateaus followed by sudden jumps. Quitters leave during the plateau, just before the jump.",
+        "render_type": "stickman_animation",
+        "visual_prompt": "A stickman scene about: The Frustration Plateau",
+        "animation_instructions": "surprised; text overlay: The Frustration Plateau",
+        "camera_instructions": "static",
+        "audio_requirements": "narration",
+        "character_action": "surprised",
+        "motions": [
+          {
+            "type": "enter",
+            "target": "character",
+            "start_time": 0.0,
+            "duration": 0.8,
+            "easing": "ease_out",
+            "parameters": {
+              "from": {
+                "x": -0.2,
+                "y": 0.0
+              },
+              "to": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          },
+          {
+            "type": "fade",
+            "target": "text",
+            "start_time": 1.2,
+            "duration": 0.6,
+            "easing": "ease_in_out",
+            "parameters": {
+              "from": 1.0,
+              "to": 0.0
+            }
+          }
+        ],
+        "transition_to_next": {
+          "type": "cut",
+          "duration": 0.0,
+          "parameters": {}
+        },
+        "audio_request": {
+          "scene_number": 2,
+          "duration_seconds": 12,
+          "narration_text": "Skill growth is not a straight line. It is a staircase of long flat plateaus followed by sudden jumps. Quitters leave during the plateau, just before the jump.",
+          "voice_reference": "default",
+          "background_music_reference": "",
+          "sound_effect_references": [],
+          "audio_format": "aac"
+        },
+        "visual_description": {
+          "environment": {
+            "type": "abstract_info_space",
+            "background_color": [
+              16,
+              24,
+              48
+            ],
+            "ground_color": [
+              32,
+              40,
+              64
+            ],
+            "ground_y": 0.8,
+            "accent_color": [
+              120,
+              200,
+              255
+            ]
+          },
+          "characters": [
+            {
+              "name": "learner",
+              "pose": "surprised",
+              "emotion": "frustrated",
+              "x": 0.5,
+              "y": 0.78,
+              "scale": 1.0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "visible": true
+            }
+          ],
+          "objects": [
+            {
+              "name": "prop_graph",
+              "type": "graph",
+              "x": 0.82,
+              "y": 0.55,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "visible": true,
+              "color": [
+                120,
+                200,
+                255
+              ]
+            }
+          ],
+          "text_elements": [
+            {
+              "text": "The Frustration Plateau",
+              "x": 0.5,
+              "y": 0.2,
+              "size": "large",
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "opacity": 1.0,
+              "style": "bold",
+              "anchor": "center",
+              "max_width": 0.8,
+              "fade_in": 0.4,
+              "fade_out": 0.0,
+              "appear_at": 0.0,
+              "duration": 0.0
+            }
+          ],
+          "effects": [],
+          "camera": {
+            "pattern": "static",
+            "focus_target": null,
+            "start_state": {},
+            "end_state": {},
+            "duration": 0.0,
+            "easing": "ease_in_out"
+          }
+        }
+      },
+      {
+        "scene_number": 3,
+        "duration_seconds": 10,
+        "narration": "Beginners overestimate early speed and underestimate later speed. When reality does not match the fantasy, the brain looks for a reason to stop.",
+        "render_type": "stickman_animation",
+        "visual_prompt": "A stickman scene about: Expectations vs Reality",
+        "animation_instructions": "point; text overlay: Expectations vs Reality",
+        "camera_instructions": "pan left",
+        "audio_requirements": "narration",
+        "character_action": "point",
+        "motions": [
+          {
+            "type": "enter",
+            "target": "character",
+            "start_time": 0.0,
+            "duration": 0.8,
+            "easing": "ease_out",
+            "parameters": {
+              "from": {
+                "x": -0.2,
+                "y": 0.0
+              },
+              "to": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          },
+          {
+            "type": "fade",
+            "target": "text",
+            "start_time": 1.2,
+            "duration": 0.6,
+            "easing": "ease_in_out",
+            "parameters": {
+              "from": 1.0,
+              "to": 0.0
+            }
+          }
+        ],
+        "transition_to_next": {
+          "type": "cut",
+          "duration": 0.0,
+          "parameters": {}
+        },
+        "audio_request": {
+          "scene_number": 3,
+          "duration_seconds": 10,
+          "narration_text": "Beginners overestimate early speed and underestimate later speed. When reality does not match the fantasy, the brain looks for a reason to stop.",
+          "voice_reference": "default",
+          "background_music_reference": "",
+          "sound_effect_references": [],
+          "audio_format": "aac"
+        },
+        "visual_description": {
+          "environment": {
+            "type": "workspace",
+            "background_color": [
+              30,
+              34,
+              42
+            ],
+            "ground_color": [
+              52,
+              58,
+              68
+            ],
+            "ground_y": 0.8,
+            "accent_color": [
+              255,
+              170,
+              60
+            ]
+          },
+          "characters": [
+            {
+              "name": "learner",
+              "pose": "point",
+              "emotion": "focused",
+              "x": 0.5,
+              "y": 0.78,
+              "scale": 1.0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "visible": true
+            }
+          ],
+          "objects": [
+            {
+              "name": "prop_thought_bubble",
+              "type": "thought_bubble",
+              "x": 0.82,
+              "y": 0.55,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "visible": true,
+              "color": [
+                255,
+                170,
+                60
+              ]
+            }
+          ],
+          "text_elements": [
+            {
+              "text": "Expectations vs Reality",
+              "x": 0.5,
+              "y": 0.2,
+              "size": "large",
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "opacity": 1.0,
+              "style": "bold",
+              "anchor": "center",
+              "max_width": 0.8,
+              "fade_in": 0.4,
+              "fade_out": 0.0,
+              "appear_at": 0.0,
+              "duration": 0.0
+            }
+          ],
+          "effects": [],
+          "camera": {
+            "pattern": "pan_left",
+            "focus_target": null,
+            "start_state": {},
+            "end_state": {},
+            "duration": 0.0,
+            "easing": "ease_in_out"
+          }
+        }
+      },
+      {
+        "scene_number": 4,
+        "duration_seconds": 8,
+        "narration": "Real practice means focused reps with feedback, and it feels boring on purpose. Mindless repetition feels productive but changes nothing.",
+        "render_type": "stickman_animation",
+        "visual_prompt": "A stickman scene about: Deliberate Practice Feels Slow",
+        "animation_instructions": "talk; text overlay: Deliberate Practice Feels Slow",
+        "camera_instructions": "static",
+        "audio_requirements": "narration",
+        "character_action": "talk",
+        "motions": [
+          {
+            "type": "enter",
+            "target": "character",
+            "start_time": 0.0,
+            "duration": 0.8,
+            "easing": "ease_out",
+            "parameters": {
+              "from": {
+                "x": -0.2,
+                "y": 0.0
+              },
+              "to": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          },
+          {
+            "type": "fade",
+            "target": "text",
+            "start_time": 1.2,
+            "duration": 0.6,
+            "easing": "ease_in_out",
+            "parameters": {
+              "from": 1.0,
+              "to": 0.0
+            }
+          }
+        ],
+        "transition_to_next": {
+          "type": "cut",
+          "duration": 0.0,
+          "parameters": {}
+        },
+        "audio_request": {
+          "scene_number": 4,
+          "duration_seconds": 8,
+          "narration_text": "Real practice means focused reps with feedback, and it feels boring on purpose. Mindless repetition feels productive but changes nothing.",
+          "voice_reference": "default",
+          "background_music_reference": "",
+          "sound_effect_references": [],
+          "audio_format": "aac"
+        },
+        "visual_description": {
+          "environment": {
+            "type": "classroom",
+            "background_color": [
+              24,
+              30,
+              40
+            ],
+            "ground_color": [
+              50,
+              58,
+              46
+            ],
+            "ground_y": 0.8,
+            "accent_color": [
+              130,
+              220,
+              130
+            ]
+          },
+          "characters": [
+            {
+              "name": "learner",
+              "pose": "talk",
+              "emotion": "focused",
+              "x": 0.5,
+              "y": 0.78,
+              "scale": 1.0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "visible": true
+            }
+          ],
+          "objects": [
+            {
+              "name": "prop_book",
+              "type": "book",
+              "x": 0.82,
+              "y": 0.55,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "visible": true,
+              "color": [
+                130,
+                220,
+                130
+              ]
+            }
+          ],
+          "text_elements": [
+            {
+              "text": "Deliberate Practice Feels Slow",
+              "x": 0.5,
+              "y": 0.2,
+              "size": "large",
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "opacity": 1.0,
+              "style": "bold",
+              "anchor": "center",
+              "max_width": 0.8,
+              "fade_in": 0.4,
+              "fade_out": 0.0,
+              "appear_at": 0.0,
+              "duration": 0.0
+            }
+          ],
+          "effects": [],
+          "camera": {
+            "pattern": "static",
+            "focus_target": null,
+            "start_state": {},
+            "end_state": {},
+            "duration": 0.0,
+            "easing": "ease_in_out"
+          }
+        }
+      },
+      {
+        "scene_number": 5,
+        "duration_seconds": 9,
+        "narration": "Systems carry you on the days motivation disappears. One focused 25-minute session beats a heroic three-hour session you will not repeat.",
+        "render_type": "stickman_animation",
+        "visual_prompt": "A stickman scene about: Build a System, Not Motivation",
+        "animation_instructions": "wave; text overlay: Build a System, Not Motivation",
+        "camera_instructions": "slow zoom out",
+        "audio_requirements": "narration",
+        "character_action": "wave",
+        "motions": [
+          {
+            "type": "enter",
+            "target": "character",
+            "start_time": 0.0,
+            "duration": 0.8,
+            "easing": "ease_out",
+            "parameters": {
+              "from": {
+                "x": -0.2,
+                "y": 0.0
+              },
+              "to": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          },
+          {
+            "type": "fade",
+            "target": "text",
+            "start_time": 1.2,
+            "duration": 0.6,
+            "easing": "ease_in_out",
+            "parameters": {
+              "from": 1.0,
+              "to": 0.0
+            }
+          }
+        ],
+        "transition_to_next": {
+          "type": "cut",
+          "duration": 0.0,
+          "parameters": {}
+        },
+        "audio_request": {
+          "scene_number": 5,
+          "duration_seconds": 9,
+          "narration_text": "Systems carry you on the days motivation disappears. One focused 25-minute session beats a heroic three-hour session you will not repeat.",
+          "voice_reference": "default",
+          "background_music_reference": "",
+          "sound_effect_references": [],
+          "audio_format": "aac"
+        },
+        "visual_description": {
+          "environment": {
+            "type": "office",
+            "background_color": [
+              28,
+              32,
+              40
+            ],
+            "ground_color": [
+              70,
+              74,
+              82
+            ],
+            "ground_y": 0.8,
+            "accent_color": [
+              255,
+              220,
+              120
+            ]
+          },
+          "characters": [
+            {
+              "name": "learner",
+              "pose": "wave",
+              "emotion": "happy",
+              "x": 0.5,
+              "y": 0.78,
+              "scale": 1.0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "visible": true
+            }
+          ],
+          "objects": [
+            {
+              "name": "prop_calendar",
+              "type": "calendar",
+              "x": 0.82,
+              "y": 0.55,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "visible": true,
+              "color": [
+                255,
+                220,
+                120
+              ]
+            }
+          ],
+          "text_elements": [
+            {
+              "text": "Build a System, Not Motivation",
+              "x": 0.5,
+              "y": 0.2,
+              "size": "large",
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "opacity": 1.0,
+              "style": "bold",
+              "anchor": "center",
+              "max_width": 0.8,
+              "fade_in": 0.4,
+              "fade_out": 0.0,
+              "appear_at": 0.0,
+              "duration": 0.0
+            }
+          ],
+          "effects": [],
+          "camera": {
+            "pattern": "slow_zoom_out",
+            "focus_target": null,
+            "start_state": {},
+            "end_state": {},
+            "duration": 0.0,
+            "easing": "ease_in_out"
+          }
+        }
+      },
+      {
+        "scene_number": 6,
+        "duration_seconds": 12,
+        "narration": "Keep the session small, keep the feedback loop tight, and let the plateau do its work. The breakthrough comes from the reps you did not want to do.",
+        "render_type": "stickman_animation",
+        "visual_prompt": "A stickman scene about: The Breakthrough Is Closer Than You Think",
+        "animation_instructions": "point; text overlay: The Breakthrough Is Closer Than You Think",
+        "camera_instructions": "focus on character",
+        "audio_requirements": "narration",
+        "character_action": "point",
+        "motions": [
+          {
+            "type": "enter",
+            "target": "character",
+            "start_time": 0.0,
+            "duration": 0.8,
+            "easing": "ease_out",
+            "parameters": {
+              "from": {
+                "x": -0.2,
+                "y": 0.0
+              },
+              "to": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          },
+          {
+            "type": "fade",
+            "target": "text",
+            "start_time": 1.2,
+            "duration": 0.6,
+            "easing": "ease_in_out",
+            "parameters": {
+              "from": 1.0,
+              "to": 0.0
+            }
+          }
+        ],
+        "transition_to_next": {
+          "type": "fade_to_black",
+          "duration": 0.4,
+          "parameters": {}
+        },
+        "audio_request": {
+          "scene_number": 6,
+          "duration_seconds": 12,
+          "narration_text": "Keep the session small, keep the feedback loop tight, and let the plateau do its work. The breakthrough comes from the reps you did not want to do.",
+          "voice_reference": "default",
+          "background_music_reference": "",
+          "sound_effect_references": [],
+          "audio_format": "aac"
+        },
+        "visual_description": {
+          "environment": {
+            "type": "study_desk",
+            "background_color": [
+              18,
+              22,
+              30
+            ],
+            "ground_color": [
+              40,
+              46,
+              56
+            ],
+            "ground_y": 0.8,
+            "accent_color": [
+              255,
+              180,
+              80
+            ]
+          },
+          "characters": [
+            {
+              "name": "learner",
+              "pose": "point",
+              "emotion": "excited",
+              "x": 0.5,
+              "y": 0.78,
+              "scale": 1.0,
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "visible": true
+            }
+          ],
+          "objects": [
+            {
+              "name": "prop_check_mark",
+              "type": "check_mark",
+              "x": 0.82,
+              "y": 0.55,
+              "scale": 1.0,
+              "rotation": 0.0,
+              "opacity": 1.0,
+              "visible": true,
+              "color": [
+                255,
+                180,
+                80
+              ]
+            }
+          ],
+          "text_elements": [
+            {
+              "text": "The Breakthrough Is Closer Than You Think",
+              "x": 0.5,
+              "y": 0.2,
+              "size": "large",
+              "color": [
+                255,
+                255,
+                255
+              ],
+              "opacity": 1.0,
+              "style": "bold",
+              "anchor": "center",
+              "max_width": 0.8,
+              "fade_in": 0.4,
+              "fade_out": 0.0,
+              "appear_at": 0.0,
+              "duration": 0.0
+            }
+          ],
+          "effects": [],
+          "camera": {
+            "pattern": "focus_on_character",
+            "focus_target": null,
+            "start_state": {},
+            "end_state": {},
+            "duration": 0.0,
+            "easing": "ease_in_out"
+          }
+        }
+      }
+    ],
+    "render_job_plan": {
+      "total_jobs": 6,
+      "jobs": [
+        {
+          "job_id": "why-most-people-quit-lea-scene-01",
+          "scene_number": 1,
+          "duration_seconds": 11,
+          "render_type": "stickman_animation",
+          "character_ids": [
+            "learner"
+          ],
+          "asset_ids": [],
+          "visual_prompt": "A stickman scene about: The 100-Hour Myth",
+          "animation_instructions": "talk; text overlay: The 100-Hour Myth",
+          "camera_instructions": "slow zoom in",
+          "audio_requirements": "narration",
+          "motions": [
+            {
+              "type": "enter",
+              "target": "character",
+              "start_time": 0.0,
+              "duration": 0.8,
+              "easing": "ease_out",
+              "parameters": {
+                "from": {
+                  "x": -0.2,
+                  "y": 0.0
+                },
+                "to": {
+                  "x": 0.0,
+                  "y": 0.0
+                }
+              }
+            },
+            {
+              "type": "fade",
+              "target": "text",
+              "start_time": 1.2,
+              "duration": 0.6,
+              "easing": "ease_in_out",
+              "parameters": {
+                "from": 1.0,
+                "to": 0.0
+              }
+            }
+          ],
+          "transition_to_next": {
+            "type": "cut",
+            "duration": 0.0,
+            "parameters": {}
+          },
+          "audio_request": {
+            "scene_number": 1,
+            "duration_seconds": 11,
+            "narration_text": "Most people quit a new skill right before the moment it would have started working. The first weeks feel slow, so the beginner assumes progress is broken.",
+            "voice_reference": "default",
+            "background_music_reference": "",
+            "sound_effect_references": [],
+            "audio_format": "aac"
+          },
+          "visual_description": {
+            "environment": {
+              "type": "study_desk",
+              "background_color": [
+                20,
+                26,
+                34
+              ],
+              "ground_color": [
+                45,
+                52,
+                62
+              ],
+              "ground_y": 0.8,
+              "accent_color": [
+                255,
+                200,
+                90
+              ]
+            },
+            "characters": [
+              {
+                "name": "learner",
+                "pose": "talk",
+                "emotion": "focused",
+                "x": 0.5,
+                "y": 0.78,
+                "scale": 1.0,
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "visible": true
+              }
+            ],
+            "objects": [
+              {
+                "name": "prop_clock",
+                "type": "clock",
+                "x": 0.82,
+                "y": 0.55,
+                "scale": 1.0,
+                "rotation": 0.0,
+                "opacity": 1.0,
+                "visible": true,
+                "color": [
+                  255,
+                  200,
+                  90
+                ]
+              }
+            ],
+            "text_elements": [
+              {
+                "text": "The 100-Hour Myth",
+                "x": 0.5,
+                "y": 0.2,
+                "size": "large",
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "opacity": 1.0,
+                "style": "bold",
+                "anchor": "center",
+                "max_width": 0.8,
+                "fade_in": 0.4,
+                "fade_out": 0.0,
+                "appear_at": 0.0,
+                "duration": 0.0
+              }
+            ],
+            "effects": [],
+            "camera": {
+              "pattern": "slow_zoom_in",
+              "focus_target": null,
+              "start_state": {},
+              "end_state": {},
+              "duration": 0.0,
+              "easing": "ease_in_out"
+            }
+          }
+        },
+        {
+          "job_id": "why-most-people-quit-lea-scene-02",
+          "scene_number": 2,
+          "duration_seconds": 12,
+          "render_type": "stickman_animation",
+          "character_ids": [
+            "learner"
+          ],
+          "asset_ids": [],
+          "visual_prompt": "A stickman scene about: The Frustration Plateau",
+          "animation_instructions": "surprised; text overlay: The Frustration Plateau",
+          "camera_instructions": "static",
+          "audio_requirements": "narration",
+          "motions": [
+            {
+              "type": "enter",
+              "target": "character",
+              "start_time": 0.0,
+              "duration": 0.8,
+              "easing": "ease_out",
+              "parameters": {
+                "from": {
+                  "x": -0.2,
+                  "y": 0.0
+                },
+                "to": {
+                  "x": 0.0,
+                  "y": 0.0
+                }
+              }
+            },
+            {
+              "type": "fade",
+              "target": "text",
+              "start_time": 1.2,
+              "duration": 0.6,
+              "easing": "ease_in_out",
+              "parameters": {
+                "from": 1.0,
+                "to": 0.0
+              }
+            }
+          ],
+          "transition_to_next": {
+            "type": "cut",
+            "duration": 0.0,
+            "parameters": {}
+          },
+          "audio_request": {
+            "scene_number": 2,
+            "duration_seconds": 12,
+            "narration_text": "Skill growth is not a straight line. It is a staircase of long flat plateaus followed by sudden jumps. Quitters leave during the plateau, just before the jump.",
+            "voice_reference": "default",
+            "background_music_reference": "",
+            "sound_effect_references": [],
+            "audio_format": "aac"
+          },
+          "visual_description": {
+            "environment": {
+              "type": "abstract_info_space",
+              "background_color": [
+                16,
+                24,
+                48
+              ],
+              "ground_color": [
+                32,
+                40,
+                64
+              ],
+              "ground_y": 0.8,
+              "accent_color": [
+                120,
+                200,
+                255
+              ]
+            },
+            "characters": [
+              {
+                "name": "learner",
+                "pose": "surprised",
+                "emotion": "frustrated",
+                "x": 0.5,
+                "y": 0.78,
+                "scale": 1.0,
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "visible": true
+              }
+            ],
+            "objects": [
+              {
+                "name": "prop_graph",
+                "type": "graph",
+                "x": 0.82,
+                "y": 0.55,
+                "scale": 1.0,
+                "rotation": 0.0,
+                "opacity": 1.0,
+                "visible": true,
+                "color": [
+                  120,
+                  200,
+                  255
+                ]
+              }
+            ],
+            "text_elements": [
+              {
+                "text": "The Frustration Plateau",
+                "x": 0.5,
+                "y": 0.2,
+                "size": "large",
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "opacity": 1.0,
+                "style": "bold",
+                "anchor": "center",
+                "max_width": 0.8,
+                "fade_in": 0.4,
+                "fade_out": 0.0,
+                "appear_at": 0.0,
+                "duration": 0.0
+              }
+            ],
+            "effects": [],
+            "camera": {
+              "pattern": "static",
+              "focus_target": null,
+              "start_state": {},
+              "end_state": {},
+              "duration": 0.0,
+              "easing": "ease_in_out"
+            }
+          }
+        },
+        {
+          "job_id": "why-most-people-quit-lea-scene-03",
+          "scene_number": 3,
+          "duration_seconds": 10,
+          "render_type": "stickman_animation",
+          "character_ids": [
+            "learner"
+          ],
+          "asset_ids": [],
+          "visual_prompt": "A stickman scene about: Expectations vs Reality",
+          "animation_instructions": "point; text overlay: Expectations vs Reality",
+          "camera_instructions": "pan left",
+          "audio_requirements": "narration",
+          "motions": [
+            {
+              "type": "enter",
+              "target": "character",
+              "start_time": 0.0,
+              "duration": 0.8,
+              "easing": "ease_out",
+              "parameters": {
+                "from": {
+                  "x": -0.2,
+                  "y": 0.0
+                },
+                "to": {
+                  "x": 0.0,
+                  "y": 0.0
+                }
+              }
+            },
+            {
+              "type": "fade",
+              "target": "text",
+              "start_time": 1.2,
+              "duration": 0.6,
+              "easing": "ease_in_out",
+              "parameters": {
+                "from": 1.0,
+                "to": 0.0
+              }
+            }
+          ],
+          "transition_to_next": {
+            "type": "cut",
+            "duration": 0.0,
+            "parameters": {}
+          },
+          "audio_request": {
+            "scene_number": 3,
+            "duration_seconds": 10,
+            "narration_text": "Beginners overestimate early speed and underestimate later speed. When reality does not match the fantasy, the brain looks for a reason to stop.",
+            "voice_reference": "default",
+            "background_music_reference": "",
+            "sound_effect_references": [],
+            "audio_format": "aac"
+          },
+          "visual_description": {
+            "environment": {
+              "type": "workspace",
+              "background_color": [
+                30,
+                34,
+                42
+              ],
+              "ground_color": [
+                52,
+                58,
+                68
+              ],
+              "ground_y": 0.8,
+              "accent_color": [
+                255,
+                170,
+                60
+              ]
+            },
+            "characters": [
+              {
+                "name": "learner",
+                "pose": "point",
+                "emotion": "focused",
+                "x": 0.5,
+                "y": 0.78,
+                "scale": 1.0,
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "visible": true
+              }
+            ],
+            "objects": [
+              {
+                "name": "prop_thought_bubble",
+                "type": "thought_bubble",
+                "x": 0.82,
+                "y": 0.55,
+                "scale": 1.0,
+                "rotation": 0.0,
+                "opacity": 1.0,
+                "visible": true,
+                "color": [
+                  255,
+                  170,
+                  60
+                ]
+              }
+            ],
+            "text_elements": [
+              {
+                "text": "Expectations vs Reality",
+                "x": 0.5,
+                "y": 0.2,
+                "size": "large",
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "opacity": 1.0,
+                "style": "bold",
+                "anchor": "center",
+                "max_width": 0.8,
+                "fade_in": 0.4,
+                "fade_out": 0.0,
+                "appear_at": 0.0,
+                "duration": 0.0
+              }
+            ],
+            "effects": [],
+            "camera": {
+              "pattern": "pan_left",
+              "focus_target": null,
+              "start_state": {},
+              "end_state": {},
+              "duration": 0.0,
+              "easing": "ease_in_out"
+            }
+          }
+        },
+        {
+          "job_id": "why-most-people-quit-lea-scene-04",
+          "scene_number": 4,
+          "duration_seconds": 8,
+          "render_type": "stickman_animation",
+          "character_ids": [
+            "learner"
+          ],
+          "asset_ids": [],
+          "visual_prompt": "A stickman scene about: Deliberate Practice Feels Slow",
+          "animation_instructions": "talk; text overlay: Deliberate Practice Feels Slow",
+          "camera_instructions": "static",
+          "audio_requirements": "narration",
+          "motions": [
+            {
+              "type": "enter",
+              "target": "character",
+              "start_time": 0.0,
+              "duration": 0.8,
+              "easing": "ease_out",
+              "parameters": {
+                "from": {
+                  "x": -0.2,
+                  "y": 0.0
+                },
+                "to": {
+                  "x": 0.0,
+                  "y": 0.0
+                }
+              }
+            },
+            {
+              "type": "fade",
+              "target": "text",
+              "start_time": 1.2,
+              "duration": 0.6,
+              "easing": "ease_in_out",
+              "parameters": {
+                "from": 1.0,
+                "to": 0.0
+              }
+            }
+          ],
+          "transition_to_next": {
+            "type": "cut",
+            "duration": 0.0,
+            "parameters": {}
+          },
+          "audio_request": {
+            "scene_number": 4,
+            "duration_seconds": 8,
+            "narration_text": "Real practice means focused reps with feedback, and it feels boring on purpose. Mindless repetition feels productive but changes nothing.",
+            "voice_reference": "default",
+            "background_music_reference": "",
+            "sound_effect_references": [],
+            "audio_format": "aac"
+          },
+          "visual_description": {
+            "environment": {
+              "type": "classroom",
+              "background_color": [
+                24,
+                30,
+                40
+              ],
+              "ground_color": [
+                50,
+                58,
+                46
+              ],
+              "ground_y": 0.8,
+              "accent_color": [
+                130,
+                220,
+                130
+              ]
+            },
+            "characters": [
+              {
+                "name": "learner",
+                "pose": "talk",
+                "emotion": "focused",
+                "x": 0.5,
+                "y": 0.78,
+                "scale": 1.0,
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "visible": true
+              }
+            ],
+            "objects": [
+              {
+                "name": "prop_book",
+                "type": "book",
+                "x": 0.82,
+                "y": 0.55,
+                "scale": 1.0,
+                "rotation": 0.0,
+                "opacity": 1.0,
+                "visible": true,
+                "color": [
+                  130,
+                  220,
+                  130
+                ]
+              }
+            ],
+            "text_elements": [
+              {
+                "text": "Deliberate Practice Feels Slow",
+                "x": 0.5,
+                "y": 0.2,
+                "size": "large",
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "opacity": 1.0,
+                "style": "bold",
+                "anchor": "center",
+                "max_width": 0.8,
+                "fade_in": 0.4,
+                "fade_out": 0.0,
+                "appear_at": 0.0,
+                "duration": 0.0
+              }
+            ],
+            "effects": [],
+            "camera": {
+              "pattern": "static",
+              "focus_target": null,
+              "start_state": {},
+              "end_state": {},
+              "duration": 0.0,
+              "easing": "ease_in_out"
+            }
+          }
+        },
+        {
+          "job_id": "why-most-people-quit-lea-scene-05",
+          "scene_number": 5,
+          "duration_seconds": 9,
+          "render_type": "stickman_animation",
+          "character_ids": [
+            "learner"
+          ],
+          "asset_ids": [],
+          "visual_prompt": "A stickman scene about: Build a System, Not Motivation",
+          "animation_instructions": "wave; text overlay: Build a System, Not Motivation",
+          "camera_instructions": "slow zoom out",
+          "audio_requirements": "narration",
+          "motions": [
+            {
+              "type": "enter",
+              "target": "character",
+              "start_time": 0.0,
+              "duration": 0.8,
+              "easing": "ease_out",
+              "parameters": {
+                "from": {
+                  "x": -0.2,
+                  "y": 0.0
+                },
+                "to": {
+                  "x": 0.0,
+                  "y": 0.0
+                }
+              }
+            },
+            {
+              "type": "fade",
+              "target": "text",
+              "start_time": 1.2,
+              "duration": 0.6,
+              "easing": "ease_in_out",
+              "parameters": {
+                "from": 1.0,
+                "to": 0.0
+              }
+            }
+          ],
+          "transition_to_next": {
+            "type": "cut",
+            "duration": 0.0,
+            "parameters": {}
+          },
+          "audio_request": {
+            "scene_number": 5,
+            "duration_seconds": 9,
+            "narration_text": "Systems carry you on the days motivation disappears. One focused 25-minute session beats a heroic three-hour session you will not repeat.",
+            "voice_reference": "default",
+            "background_music_reference": "",
+            "sound_effect_references": [],
+            "audio_format": "aac"
+          },
+          "visual_description": {
+            "environment": {
+              "type": "office",
+              "background_color": [
+                28,
+                32,
+                40
+              ],
+              "ground_color": [
+                70,
+                74,
+                82
+              ],
+              "ground_y": 0.8,
+              "accent_color": [
+                255,
+                220,
+                120
+              ]
+            },
+            "characters": [
+              {
+                "name": "learner",
+                "pose": "wave",
+                "emotion": "happy",
+                "x": 0.5,
+                "y": 0.78,
+                "scale": 1.0,
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "visible": true
+              }
+            ],
+            "objects": [
+              {
+                "name": "prop_calendar",
+                "type": "calendar",
+                "x": 0.82,
+                "y": 0.55,
+                "scale": 1.0,
+                "rotation": 0.0,
+                "opacity": 1.0,
+                "visible": true,
+                "color": [
+                  255,
+                  220,
+                  120
+                ]
+              }
+            ],
+            "text_elements": [
+              {
+                "text": "Build a System, Not Motivation",
+                "x": 0.5,
+                "y": 0.2,
+                "size": "large",
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "opacity": 1.0,
+                "style": "bold",
+                "anchor": "center",
+                "max_width": 0.8,
+                "fade_in": 0.4,
+                "fade_out": 0.0,
+                "appear_at": 0.0,
+                "duration": 0.0
+              }
+            ],
+            "effects": [],
+            "camera": {
+              "pattern": "slow_zoom_out",
+              "focus_target": null,
+              "start_state": {},
+              "end_state": {},
+              "duration": 0.0,
+              "easing": "ease_in_out"
+            }
+          }
+        },
+        {
+          "job_id": "why-most-people-quit-lea-scene-06",
+          "scene_number": 6,
+          "duration_seconds": 12,
+          "render_type": "stickman_animation",
+          "character_ids": [
+            "learner"
+          ],
+          "asset_ids": [],
+          "visual_prompt": "A stickman scene about: The Breakthrough Is Closer Than You Think",
+          "animation_instructions": "point; text overlay: The Breakthrough Is Closer Than You Think",
+          "camera_instructions": "focus on character",
+          "audio_requirements": "narration",
+          "motions": [
+            {
+              "type": "enter",
+              "target": "character",
+              "start_time": 0.0,
+              "duration": 0.8,
+              "easing": "ease_out",
+              "parameters": {
+                "from": {
+                  "x": -0.2,
+                  "y": 0.0
+                },
+                "to": {
+                  "x": 0.0,
+                  "y": 0.0
+                }
+              }
+            },
+            {
+              "type": "fade",
+              "target": "text",
+              "start_time": 1.2,
+              "duration": 0.6,
+              "easing": "ease_in_out",
+              "parameters": {
+                "from": 1.0,
+                "to": 0.0
+              }
+            }
+          ],
+          "transition_to_next": {
+            "type": "fade_to_black",
+            "duration": 0.4,
+            "parameters": {}
+          },
+          "audio_request": {
+            "scene_number": 6,
+            "duration_seconds": 12,
+            "narration_text": "Keep the session small, keep the feedback loop tight, and let the plateau do its work. The breakthrough comes from the reps you did not want to do.",
+            "voice_reference": "default",
+            "background_music_reference": "",
+            "sound_effect_references": [],
+            "audio_format": "aac"
+          },
+          "visual_description": {
+            "environment": {
+              "type": "study_desk",
+              "background_color": [
+                18,
+                22,
+                30
+              ],
+              "ground_color": [
+                40,
+                46,
+                56
+              ],
+              "ground_y": 0.8,
+              "accent_color": [
+                255,
+                180,
+                80
+              ]
+            },
+            "characters": [
+              {
+                "name": "learner",
+                "pose": "point",
+                "emotion": "excited",
+                "x": 0.5,
+                "y": 0.78,
+                "scale": 1.0,
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "visible": true
+              }
+            ],
+            "objects": [
+              {
+                "name": "prop_check_mark",
+                "type": "check_mark",
+                "x": 0.82,
+                "y": 0.55,
+                "scale": 1.0,
+                "rotation": 0.0,
+                "opacity": 1.0,
+                "visible": true,
+                "color": [
+                  255,
+                  180,
+                  80
+                ]
+              }
+            ],
+            "text_elements": [
+              {
+                "text": "The Breakthrough Is Closer Than You Think",
+                "x": 0.5,
+                "y": 0.2,
+                "size": "large",
+                "color": [
+                  255,
+                  255,
+                  255
+                ],
+                "opacity": 1.0,
+                "style": "bold",
+                "anchor": "center",
+                "max_width": 0.8,
+                "fade_in": 0.4,
+                "fade_out": 0.0,
+                "appear_at": 0.0,
+                "duration": 0.0
+              }
+            ],
+            "effects": [],
+            "camera": {
+              "pattern": "focus_on_character",
+              "focus_target": null,
+              "start_state": {},
+              "end_state": {},
+              "duration": 0.0,
+              "easing": "ease_in_out"
+            }
+          }
+        }
+      ],
+      "total_duration_seconds": 62
+    },
+    "total_duration_seconds": 62
+  },
+  "artifact": null,
+  "qc_status": "not_run",
+  "qc_report_path": null
+}

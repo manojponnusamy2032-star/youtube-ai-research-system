@@ -2057,6 +2057,10 @@ class StickmanRenderer:
         cy = max(0, min(cy, height - 1))
         radius = max(1, radius)
         opacity = max(0.0, min(1.0, opacity))
+        # Day-21: opaque row-span fast path. Hoisted once per circle; the
+        # predicate is identical to _blend_pixel's opaque branch.
+        opaque_span = opacity >= 1.0
+        stamp_rgb = bytes((r, g, b))
         
         # Bounding box
         x_min = max(0, cx - radius)
@@ -2075,9 +2079,12 @@ class StickmanRenderer:
             x_end = min(x_max, cx + dx_max)
             
             base = y * width * 3 + x_start * 3
-            for x in range(x_start, x_end + 1):
-                idx = base + (x - x_start) * 3
-                self._blend_pixel(frame, idx, (r, g, b), opacity)
+            if opaque_span:
+                self._blit_span(frame, base, stamp_rgb * (x_end - x_start + 1))
+            else:
+                for x in range(x_start, x_end + 1):
+                    idx = base + (x - x_start) * 3
+                    self._blend_pixel(frame, idx, (r, g, b), opacity)
 
     def _draw_line(
         self,
@@ -2142,6 +2149,11 @@ class StickmanRenderer:
         frame[idx] = int(existing_r * (1.0 - opacity) + color[0] * opacity)
         frame[idx + 1] = int(existing_g * (1.0 - opacity) + color[1] * opacity)
         frame[idx + 2] = int(existing_b * (1.0 - opacity) + color[2] * opacity)
+
+    def _blit_span(self, frame: bytearray, base: int, scanline: bytes) -> None:
+        """Day-16 helper retained by Day-21: write one row span at once."""
+        frame[base:base + len(scanline)] = scanline
+
 
     def _draw_caption_overlay(
         self,

@@ -1,0 +1,53 @@
+{
+  "passed": false,
+  "overall_pass": false,
+  "job_dir": "D:\\youtube-ai-research-system\\youtube-ai-research-system\\output\\day21_profiling",
+  "visual_plan": {
+    "valid": false,
+    "errors": [
+      "File not found"
+    ]
+  },
+  "render_progress": {
+    "valid": false,
+    "errors": [
+      "File not found"
+    ]
+  },
+  "mp4": {
+    "path": "D:\\youtube-ai-research-system\\youtube-ai-research-system\\output\\day21_profiling\\baseline_run\\jobs\\job_001\\video.mp4",
+    "valid": true,
+    "exists": true,
+    "non_zero_size": true,
+    "parseable": true,
+    "video_stream_exists": true,
+    "duration_seconds": 59.966667,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30.0,
+    "audio_present": true,
+    "codec": "h264",
+    "errors": []
+  },
+  "optional_artifacts": {
+    "clip_stats": "missing",
+    "job.json": "missing",
+    "research.json": "missing",
+    "script.json": "missing",
+    "strategy.json": "missing"
+  },
+  "errors": [
+    "Missing visual_plan.json",
+    "Missing render_progress.json"
+  ],
+  "warnings": [],
+  "visual_plan_valid": false,
+  "render_progress_valid": false,
+  "mp4_valid": true,
+  "render_status": null,
+  "scene_count": 0,
+  "duration_seconds": 59.966667,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30.0
+}

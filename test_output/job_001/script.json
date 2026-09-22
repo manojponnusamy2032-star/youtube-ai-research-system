@@ -1,0 +1,43 @@
+{
+  "topic": "Smoke test",
+  "title": "Why Most People Quit Learning a Skill Too Early",
+  "hook": "Most people quit a new skill right before the moment it would have started working. The first weeks feel slow, so the beginner assumes progress is broken.",
+  "sections": [
+    {
+      "heading": "The 100-Hour Myth",
+      "narration": "Most people quit a new skill right before the moment it would have started working. The first weeks feel slow, so the beginner assumes progress is broken.",
+      "duration_seconds": 11
+    },
+    {
+      "heading": "The Frustration Plateau",
+      "narration": "Skill growth is not a straight line. It is a staircase of long flat plateaus followed by sudden jumps. Quitters leave during the plateau, just before the jump.",
+      "duration_seconds": 12
+    },
+    {
+      "heading": "Expectations vs Reality",
+      "narration": "Beginners overestimate early speed and underestimate later speed. When reality does not match the fantasy, the brain looks for a reason to stop.",
+      "duration_seconds": 10
+    },
+    {
+      "heading": "Deliberate Practice Feels Slow",
+      "narration": "Real practice means focused reps with feedback, and it feels boring on purpose. Mindless repetition feels productive but changes nothing.",
+      "duration_seconds": 8
+    },
+    {
+      "heading": "Build a System, Not Motivation",
+      "narration": "Systems carry you on the days motivation disappears. One focused 25-minute session beats a heroic three-hour session you will not repeat.",
+      "duration_seconds": 9
+    },
+    {
+      "heading": "The Breakthrough Is Closer Than You Think",
+      "narration": "Keep the session small, keep the feedback loop tight, and let the plateau do its work. The breakthrough comes from the reps you did not want to do.",
+      "duration_seconds": 12
+    }
+  ],
+  "call_to_action": "Commit to one focused 25-minute session today.",
+  "total_duration_seconds": 62,
+  "intro": "",
+  "section_payloads": [],
+  "scene_payloads": [],
+  "estimated_duration_minutes": 0
+}
